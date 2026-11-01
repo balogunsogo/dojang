@@ -13,9 +13,14 @@ export const BODY_RADIUS = 0.34;
 
 /** Hurt volumes in the defender's local frame (metres). */
 export const HURT = {
-  /** Trunk protector (hogu): vertical capsule. */
+  /**
+   * Trunk protector (hogu): vertical capsule. The rounded cap adds bodyRadius,
+   * so the protector spans roughly 0.78–1.42 m (belt to shoulders). Phase 2
+   * lowered the segment top from 1.38: its cap reached the chin and head
+   * kicks registered as body hits.
+   */
   bodyBottom: 0.98,
-  bodyTop: 1.38,
+  bodyTop: 1.22,
   bodyRadius: 0.2,
   /** Head (headgear). */
   headHeight: 1.62,

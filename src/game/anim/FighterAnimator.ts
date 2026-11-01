@@ -230,6 +230,15 @@ export class FighterAnimator {
         const info = r ? { zone: r.zone, heavy: r.heavy, side: r.side * f.mirror } : null;
         return { kind: 'pose', key: 'block', pose: m(blockPose(base, info, e)), planted: true };
       }
+      case 'down': {
+        // Fall (CC0 Death01, first 0.9 s), stay down, then rise by playing it back.
+        const fallEnd = 0.9;
+        const total = Math.max(1, f.stunTicks) / 60;
+        const tt = t / 60;
+        const rise = Math.min(0.75, total * 0.35);
+        const time = tt < fallEnd ? tt : tt > total - rise ? Math.max(0, fallEnd * ((total - tt) / rise)) : fallEnd;
+        return { kind: 'clip', key: 'down', clip: 'Death01', time, loop: false };
+      }
       case 'ko': {
         const dur = this.actions.get('Death01')?.getClip().duration ?? 2;
         return { kind: 'clip', key: 'ko', clip: 'Death01', time: Math.min(dur - 0.01, t / 60), loop: false };
