@@ -1,13 +1,29 @@
 import * as THREE from 'three';
 import type { Fighter } from '../combat/Fighter';
-import { clamp, DEG, smoothstep } from '../math';
-import { attackKeys, GUARD, mirrorPose, type Pose, pose as derive, sampleKeys, STANCE } from './poses';
+import { clamp, DEG, lerp, smoothstep } from '../math';
+import { FootPlanner, type FootTarget } from './FootPlanner';
+import {
+  ANKLE_H,
+  type AttackOutcome,
+  attackKeys,
+  blockPose,
+  GUARD,
+  hitPose,
+  lerpPose,
+  mirrorPose,
+  type Pose,
+  pose as derive,
+  reactionEnvelope,
+  sampleKeys,
+  STANCE,
+} from './poses';
 import { BONE, findBone, rotateWorld, setWorldPos, setWorldQuat, TwoBoneIK } from './rig';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const POINT_ANGLE = 58 * DEG;
+const TICK = 1 / 60;
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -20,16 +36,28 @@ const _bodyQ = new THREE.Quaternion();
 const _chestQ = new THREE.Quaternion();
 const _groupQ = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
+const _w = new THREE.Vector3();
 
 type Source =
-  | { kind: 'pose'; key: string; pose: Pose }
+  | { kind: 'pose'; key: string; pose: Pose; planted: boolean }
   | { kind: 'clip'; key: string; clip: string; time: number; loop: boolean };
 
+/** Smooth, non-repeating noise in about [-1, 1] (sum of incommensurate sines). */
+const noise = (t: number, seed: number) =>
+  Math.sin(t * 1.13 + seed) * 0.5 + Math.sin(t * 0.61 + seed * 2.3) * 0.32 + Math.sin(t * 2.07 + seed * 0.7) * 0.18;
+
 /**
- * Drives one fighter's skeleton from simulation state. Sourced CC0 clips are
- * used for hit reactions, knockdown and idle; Taekwondo techniques and
- * footwork are procedural IK key poses. Every source change is cross-faded
- * from a snapshot of the previously displayed pose.
+ * Drives one fighter's skeleton from simulation state.
+ *
+ * Layers (all presentation only; the simulation never reads them):
+ *  1. Base pose from state: stance/guard footwork, technique keyframes timed
+ *     to frame data, or procedural hit/block reactions. CC0 clips are used
+ *     for the knockdown and the victory idle.
+ *  2. Life: breathing, slow weight shifts, guard drift and a TKD bounce whose
+ *     rhythm and amplitude wander, with a per-fighter seed.
+ *  3. Foot planting: feet stay put and take discrete steps (FootPlanner).
+ *  4. Analytic IK solve, fists, head look-at.
+ *  5. Time-based cross-fade from a snapshot when the source changes.
  */
 export class FighterAnimator {
   readonly group: THREE.Group;
@@ -51,17 +79,31 @@ export class FighterAnimator {
   private activeClip: string | null = null;
 
   private sourceKey = '';
-  private fadeTicks = 0;
-  private fadeLen = 1;
+  private fadeT = 1;
+  private fadeLen = 0.1;
+  private first = true;
   private readonly snapQ: THREE.Quaternion[] = [];
   private readonly snapHips = new THREE.Vector3();
-  private bounce = 0;
+
+  private readonly planner = new FootPlanner();
+  private readonly seed: number;
+  private time = 0;
+  /** Smoothed guard weight (0 = open stance, 1 = high guard). */
+  private guardW = 0;
+  /** Smoothed local velocity (forward, side) for leaning into motion. */
+  private velF = 0;
+  private velS = 0;
+  private accF = 0;
+  private accS = 0;
+  /** Smoothed bounce amplitude (wanders between lively and settled). */
+  private bounceAmp = 0.018;
 
   /** Debug: force a pose (pose lab). */
   overridePose: Pose | null = null;
 
-  constructor(group: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[]) {
+  constructor(group: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[], seed = 1) {
     this.group = group;
+    this.seed = seed * 12.9898;
     const b = {} as Record<keyof typeof BONE, THREE.Bone>;
     for (const k of Object.keys(BONE) as (keyof typeof BONE)[]) b[k] = findBone(model, BONE[k]);
     this.b = b;
@@ -112,51 +154,81 @@ export class FighterAnimator {
    * @param f simulation fighter
    * @param alpha interpolation fraction between sim ticks (0 during hitstop)
    * @param x,z,yaw interpolated ground transform
+   * @param dt render seconds since the last update (0 freezes secondary motion)
    */
-  update(f: Fighter, alpha: number, x: number, z: number, yaw: number) {
+  update(f: Fighter, alpha: number, x: number, z: number, yaw: number, dt = TICK) {
     this.group.position.set(x, 0, z);
     this.group.rotation.set(0, yaw, 0);
     this.group.updateMatrixWorld(true);
+    this.time += dt;
 
-    const src = this.overridePose ? { kind: 'pose' as const, key: 'override', pose: this.overridePose } : this.pickSource(f, alpha);
+    const src: Source = this.overridePose
+      ? { kind: 'pose', key: 'override', pose: this.overridePose, planted: false }
+      : this.pickSource(f, alpha, dt);
     if (src.key !== this.sourceKey) {
-      this.snapshot();
-      this.fadeLen = this.fadeFor(f, src);
-      this.fadeTicks = 0;
+      if (!this.first) {
+        this.snapshot();
+        this.fadeLen = this.fadeFor(src.key);
+        this.fadeT = 0;
+      }
       this.sourceKey = src.key;
     }
+    this.first = false;
 
-    if (src.kind === 'clip') this.applyClip(src.clip, src.time, src.loop);
-    else this.applyPose(src.pose);
+    if (src.kind === 'clip') {
+      this.planner.deactivate();
+      this.applyClip(src.clip, src.time, src.loop);
+    } else {
+      const p = src.planted ? this.plantFeet(src.pose, f, dt) : (this.planner.deactivate(), src.pose);
+      this.applyPose(p);
+    }
 
-    this.fadeTicks += 1;
-    if (this.fadeTicks < this.fadeLen) this.blendFromSnapshot(smoothstep(this.fadeTicks / this.fadeLen));
+    if (this.fadeT < 1) {
+      this.fadeT = Math.min(1, this.fadeT + dt / this.fadeLen);
+      // Ease-out: most of the change happens early, so inputs feel immediate.
+      const w = 1 - (1 - this.fadeT) * (1 - this.fadeT);
+      this.blendFromSnapshot(w);
+    }
   }
 
-  /** Frames over which to cross-fade into a new source (render frames ~ ticks). */
-  private fadeFor(f: Fighter, src: Source): number {
-    if (src.key.startsWith('attack')) return 3;
-    if (src.key.startsWith('hit')) return 3;
-    if (src.key.startsWith('ko')) return 6;
-    if (f.state === 'switch') return 9;
-    return 7;
+  /** Cross-fade length in seconds for a new source. */
+  private fadeFor(key: string): number {
+    if (key.startsWith('attack')) return 0.06;
+    if (key.startsWith('hit')) return 0.05;
+    if (key.startsWith('block')) return 0.05;
+    if (key.startsWith('ko')) return 0.12;
+    if (key.startsWith('victory')) return 0.35;
+    return 0.14;
   }
 
-  private pickSource(f: Fighter, alpha: number): Source {
+  private pickSource(f: Fighter, alpha: number, dt: number): Source {
     const t = f.stateTick + alpha;
     const mirror = f.stance === 'southpaw';
     const m = (p: Pose) => (mirror ? mirrorPose(p) : p);
+    this.updateMotionState(f, dt);
     switch (f.state) {
       case 'attack': {
         const atk = f.attack!;
-        return { kind: 'pose', key: `attack-${f.attackSerial}`, pose: m(sampleKeys(attackKeys(atk), t)) };
+        let outcome: AttackOutcome = 'pending';
+        if (atk.blocked) outcome = 'blocked';
+        else if (atk.hasHit) outcome = 'hit';
+        else if (f.stateTick >= atk.startup + atk.move.active) outcome = 'whiff';
+        const keys = attackKeys(atk, outcome, f.attackSerial * 31 + f.id);
+        return { kind: 'pose', key: `attack-${f.attackSerial}`, pose: m(sampleKeys(keys, t)), planted: false };
       }
       case 'hitstun': {
         const r = f.hitReaction;
-        const clip = r?.zone === 'head' ? 'Hit_Head' : 'Hit_Chest';
-        const dur = this.actions.get(clip)?.getClip().duration ?? 0.4;
-        const prog = clamp(t / Math.max(1, f.stunTicks), 0, 1);
-        return { kind: 'clip', key: `hit-${clip}`, clip, time: Math.min(dur * 0.98, prog * dur * 1.1), loop: false };
+        const e = reactionEnvelope(t, f.stunTicks);
+        const base = this.stanceLife(f, 0);
+        const info = { zone: r?.zone ?? 'body', heavy: r?.heavy ?? false, side: (r?.side ?? 0) * f.mirror };
+        return { kind: 'pose', key: 'hit', pose: m(hitPose(base, info, e)), planted: true };
+      }
+      case 'blockstun': {
+        const r = f.hitReaction;
+        const e = reactionEnvelope(t, f.stunTicks);
+        const base = this.stanceLife(f, 1);
+        const info = r ? { zone: r.zone, heavy: r.heavy, side: r.side * f.mirror } : null;
+        return { kind: 'pose', key: 'block', pose: m(blockPose(base, info, e)), planted: true };
       }
       case 'ko': {
         const dur = this.actions.get('Death01')?.getClip().duration ?? 2;
@@ -166,58 +238,135 @@ export class FighterAnimator {
         const dur = this.actions.get('Idle_Loop')?.getClip().duration ?? 2.5;
         return { kind: 'clip', key: 'victory', clip: 'Idle_Loop', time: (t / 60) % dur, loop: true };
       }
-      case 'blockstun': {
-        const k = 1 - clamp(t / Math.max(1, f.stunTicks), 0, 1);
-        return { kind: 'pose', key: `block-${f.stance}`, pose: m(derive(GUARD, { pitch: GUARD.pitch - 10 * k, hips: [0, 0.83, -0.06 - 0.05 * k] })) };
+      case 'switch': {
+        // Jump-switch: blend between the two mirrored stances with a hop.
+        const k = smoothstep(clamp(t / 10, 0, 1));
+        const from = f.stateTick < 5 ? f.stance : f.stance === 'orthodox' ? 'southpaw' : 'orthodox';
+        const a = this.stanceLife(f, this.guardW);
+        const pa = from === 'southpaw' ? mirrorPose(a) : a;
+        const pb = from === 'southpaw' ? a : mirrorPose(a);
+        const out = lerpPose(pa, pb, k);
+        const hop = Math.sin(k * Math.PI);
+        out.hips[1] += hop * 0.05;
+        out.lLeg.p[1] += hop * 0.07;
+        out.rLeg.p[1] += hop * 0.07;
+        return { kind: 'pose', key: 'loco', pose: out, planted: false };
       }
-      default:
-        return { kind: 'pose', key: `loco-${f.stance}-${f.state === 'guard' ? 'g' : 'n'}`, pose: m(this.locomotion(f, t)) };
+      case 'dash': {
+        const out = this.stanceLife(f, this.guardW);
+        // Slide-step: lean into the burst, stay low, feet glide.
+        const k = 1 - clamp(t / 12, 0, 1);
+        out.pitch += clamp(this.velF * 2.2, -12, 12) * k;
+        out.roll += clamp(-this.velS * 2, -8, 8) * k;
+        out.hips[1] -= 0.035 * k;
+        out.lLeg.p[1] += 0.02 * k;
+        return { kind: 'pose', key: 'loco', pose: m(out), planted: false };
+      }
+      default: {
+        return { kind: 'pose', key: 'loco', pose: m(this.stanceLife(f, 0)), planted: true };
+      }
     }
   }
 
-  /** Bouncing Taekwondo footwork built on the stance pose. */
-  private locomotion(f: Fighter, t: number): Pose {
-    const base = f.state === 'guard' ? GUARD : STANCE;
-    // Velocity in the fighter's local frame (side, forward), orthodox-normalized.
+  /** Track smoothed local velocity/acceleration and the guard weight. */
+  private updateMotionState(f: Fighter, dt: number) {
+    if (dt <= 0) return;
     const cs = Math.cos(f.yaw);
     const sn = Math.sin(f.yaw);
-    const mir = f.mirror;
     const vf = f.vx * sn + f.vz * cs;
-    const vs = (f.vx * cs - f.vz * sn) * mir;
-    const speed = Math.hypot(vf, vs);
-    const ph = f.stepPhase;
-    const bounceAmp = f.state === 'guard' ? 0.008 : 0.02;
-    this.bounce = Math.abs(Math.sin(ph)) * bounceAmp;
-    const out = derive(base, {});
-    out.hips[1] += this.bounce - 0.01;
-    // Lean into movement.
-    out.pitch += clamp(vf * 3, -6, 6);
-    out.roll += clamp(-vs * 3, -5, 5);
-    // Stepping: feet trail/lead with an alternating phase, lifting slightly.
-    const amp = clamp(speed * 0.07, 0, 0.12);
-    if (amp > 0.002) {
-      const sL = Math.sin(ph);
-      const sR = Math.sin(ph + Math.PI);
-      const dirS = speed > 1e-4 ? vs / speed : 0;
-      const dirF = speed > 1e-4 ? vf / speed : 0;
-      out.lLeg.p[0] += dirS * amp * sL;
-      out.lLeg.p[2] += dirF * amp * sL;
-      out.lLeg.p[1] += Math.max(0, Math.cos(ph)) * amp * 0.5;
-      out.rLeg.p[0] += dirS * amp * sR;
-      out.rLeg.p[2] += dirF * amp * sR;
-      out.rLeg.p[1] += Math.max(0, -Math.cos(ph)) * amp * 0.5;
+    const vs = (f.vx * cs - f.vz * sn) * f.mirror;
+    const k = 1 - Math.exp(-dt * 10);
+    const nf = this.velF + (vf - this.velF) * k;
+    const ns = this.velS + (vs - this.velS) * k;
+    const ka = 1 - Math.exp(-dt * 6);
+    this.accF += ((nf - this.velF) / dt - this.accF) * ka;
+    this.accS += ((ns - this.velS) / dt - this.accS) * ka;
+    this.velF = nf;
+    this.velS = ns;
+    const gTarget = f.state === 'guard' || f.state === 'blockstun' ? 1 : 0;
+    this.guardW += (gTarget - this.guardW) * (1 - Math.exp(-dt * 18));
+  }
+
+  /**
+   * Fighting stance with life: guard blend, breathing, weight shifts, a
+   * wandering bounce, hand drift and leaning into acceleration.
+   */
+  private stanceLife(f: Fighter, minGuard: number): Pose {
+    const g = Math.max(this.guardW, minGuard);
+    const out = lerpPose(STANCE, GUARD, g);
+    const t = this.time;
+    const sd = this.seed;
+    const speed = Math.hypot(this.velF, this.velS);
+    // Bounce: TKD fighters bounce on the balls of the feet; the rhythm and
+    // depth drift so it never reads as a loop.
+    const liveliness = 0.5 + 0.5 * noise(t * 0.35, sd + 4);
+    const ampTarget = (g > 0.5 ? 0.007 : 0.012 + 0.012 * liveliness) * (f.stamina < 25 ? 0.6 : 1);
+    this.bounceAmp += (ampTarget - this.bounceAmp) * 0.05;
+    const ph = f.stepPhase * (0.92 + 0.08 * noise(t * 0.2, sd));
+    const b = Math.abs(Math.sin(ph));
+    out.hips[1] += b * this.bounceAmp - 0.008;
+    // Heels lift slightly at the top of each bounce.
+    const heel = b * clamp(this.bounceAmp * 14, 0, 0.25);
+    out.lLeg.point = Math.max(out.lLeg.point, heel);
+    out.rLeg.point = Math.max(out.rLeg.point, heel * 1.2);
+    // Breathing (faster when tired) and slow weight shift between the feet.
+    const tired = f.stamina < 30 ? 1 : 0;
+    const breath = Math.sin(t * (1.6 + tired * 1.6) + sd);
+    out.pitch += breath * (0.8 + tired * 1.6);
+    out.hips[1] -= tired * 0.015;
+    const shift = noise(t * 0.45, sd + 1);
+    out.hips[0] += shift * 0.025 * (1 - g * 0.5);
+    out.hips[2] += noise(t * 0.38, sd + 2) * 0.015;
+    out.roll += shift * 1.5;
+    out.twist += noise(t * 0.5, sd + 3) * 3;
+    // Guard hands drift independently.
+    out.lArm.p = [out.lArm.p[0] + noise(t * 0.9, sd + 5) * 0.012, out.lArm.p[1] + noise(t * 0.7, sd + 6) * 0.018, out.lArm.p[2] + noise(t * 1.1, sd + 7) * 0.015];
+    out.rArm.p = [out.rArm.p[0] + noise(t * 0.8, sd + 8) * 0.01, out.rArm.p[1] + noise(t * 0.75, sd + 9) * 0.015, out.rArm.p[2]];
+    out.head += noise(t * 0.6, sd + 10) * 4;
+    // Lean into motion and into acceleration (direction changes read clearly).
+    out.pitch += clamp(this.velF * 2.5 + this.accF * 0.6, -9, 9);
+    out.roll += clamp(-this.velS * 2.5 - this.accS * 0.5, -7, 7);
+    out.hips[1] -= clamp(speed * 0.008, 0, 0.02);
+    return out;
+  }
+
+  /**
+   * Replace the pose's foot targets with planted feet that step when needed,
+   * and shift the hips over the support foot during a step.
+   */
+  private plantFeet(p: Pose, f: Fighter, dt: number): Pose {
+    const g = this.group;
+    const yawW = g.rotation.y;
+    const toTarget = (leg: Pose['lLeg']): FootTarget => {
+      g.localToWorld(_w.set(leg.p[0], leg.p[1], leg.p[2]));
+      return { x: _w.x, z: _w.z, yaw: yawW + leg.yaw * DEG };
+    };
+    if (!this.planner.active) {
+      // Start from where the feet are currently displayed (no pop).
+      const cur = (bone: THREE.Bone, leg: Pose['lLeg']): FootTarget => {
+        bone.getWorldPosition(_w);
+        return { x: _w.x, z: _w.z, yaw: yawW + leg.yaw * DEG };
+      };
+      this.planner.reset(cur(this.b.footL, p.lLeg), cur(this.b.footR, p.rLeg));
     }
-    if (f.state === 'dash') {
-      const k = 1 - clamp(t / 12, 0, 1);
-      out.pitch += clamp(vf * 2.5, -10, 10) * k;
-      out.hips[1] -= 0.03 * k;
-    }
-    if (f.state === 'switch') {
-      const k = clamp(t / 10, 0, 1);
-      out.hips[1] += Math.sin(k * Math.PI) * 0.06;
-      out.lLeg.p[1] += Math.sin(k * Math.PI) * 0.06;
-      out.rLeg.p[1] += Math.sin(k * Math.PI) * 0.06;
-    }
+    const [lo, ro] = this.planner.update([toTarget(p.lLeg), toTarget(p.rLeg)], f.vx, f.vz, dt);
+    const out = derive(p, {});
+    const apply = (leg: Pose['lLeg'], o: typeof lo) => {
+      g.worldToLocal(_w.set(o.x, 0, o.z));
+      leg.p = [_w.x, Math.max(leg.p[1], ANKLE_H) + o.lift, _w.z];
+      leg.yaw = ((o.yaw - yawW) * 180) / Math.PI;
+      if (o.stepT > 0) leg.point = Math.max(leg.point, 0.35 * Math.sin(Math.PI * o.stepT));
+    };
+    apply(out.lLeg, lo);
+    apply(out.rLeg, ro);
+    // Weight over the support foot while the other one steps.
+    const support = lo.stepT > 0 ? out.rLeg.p : ro.stepT > 0 ? out.lLeg.p : null;
+    const mid: [number, number] = [(out.lLeg.p[0] + out.rLeg.p[0]) / 2, (out.lLeg.p[2] + out.rLeg.p[2]) / 2];
+    const tx = support ? lerp(mid[0], support[0], 0.25) : mid[0];
+    const tz = support ? lerp(mid[1], support[2], 0.25) : mid[1];
+    const sMid: [number, number] = [(p.lLeg.p[0] + p.rLeg.p[0]) / 2, (p.lLeg.p[2] + p.rLeg.p[2]) / 2];
+    out.hips[0] += (tx - sMid[0]) * 0.6;
+    out.hips[2] += (tz - sMid[1]) * 0.6;
     return out;
   }
 

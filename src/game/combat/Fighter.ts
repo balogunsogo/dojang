@@ -42,6 +42,10 @@ export interface HitReaction {
   heavy: boolean;
   /** Direction the hit came from, world yaw. */
   fromYaw: number;
+  /** Technique that caused it (presentation only). */
+  kind: AttackKind;
+  /** +1 if it came from the defender's left side, -1 from the right, 0 straight on. */
+  side: number;
 }
 
 const WALK_FWD = 2.1;
@@ -383,9 +387,10 @@ export class Fighter {
     this.vz = pushZ;
   }
 
-  receiveBlock(stun: number, pushX: number, pushZ: number) {
+  receiveBlock(stun: number, pushX: number, pushZ: number, reaction?: HitReaction) {
     this.stunTicks = stun;
     this.setState('blockstun');
+    if (reaction) this.hitReaction = reaction;
     this.vx = pushX;
     this.vz = pushZ;
   }
