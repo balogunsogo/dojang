@@ -7,7 +7,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const [base = 'http://localhost:4173/', out = 'artifacts/ux', label = 'run'] = process.argv.slice(2);
+const [base = 'http://localhost:4173/', out = 'artifacts/ux', label = 'run', extra = ''] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const devices = [
   { name: 'iphone-se-landscape', width: 667, height: 375, dpr: 2 },
@@ -35,14 +35,14 @@ for (const d of devices) {
       document.addEventListener('DOMContentLoaded', () => document.head.appendChild(st));
     }, d.insets);
   }
-  await page.goto(`${base}?start=normal&seed=7`);
+  await page.goto(`${base}?start=normal&seed=7${extra}`);
   await page.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
   await page.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 90000 });
   // Let the fight develop.
   await page.evaluate(() => new Promise((r) => { const w = window.__dojang.session.world; const t = w.tick; const id = setInterval(() => { if (w.tick - t > 240) { clearInterval(id); r(); } }, 50); }));
   const data = await page.evaluate(() => {
     const W = innerWidth, H = innerHeight, G = 4;
-    const sel = '.hud-top, .hud-status, .hud-mini, .tb, .tbtn, .kick-main, .wheel, .chip, .stick-base';
+    const sel = '.hud-top, .hud-status, .hud-mini, .tb, .tbtn, .kick-main, .wheel, .chip, .stick-base, .score';
     const boxes = [...document.querySelectorAll(sel)]
       .filter((e) => { const cs = getComputedStyle(e); return cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.05; })
       .map((e) => e.getBoundingClientRect())

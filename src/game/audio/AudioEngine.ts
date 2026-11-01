@@ -89,6 +89,22 @@ export class AudioEngine {
     this.tone(t, 320, 0.06, 0.15, 'square', 200);
   }
 
+  /** Scoreboard chime: higher and longer for higher-value techniques. */
+  score(points: number) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const base = 660 + Math.min(points, 6) * 70;
+    this.tone(t + 0.02, base, 0.18, 0.14, 'triangle');
+    this.tone(t + 0.1, base * 1.5, 0.22 + points * 0.03, 0.12, 'triangle');
+  }
+
+  /** Penalty buzzer. */
+  penalty() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(t, 180, 0.35, 0.14, 'square', 150);
+  }
+
   bell(times = 1) {
     if (!this.ctx) return;
     for (let i = 0; i < times; i++) {

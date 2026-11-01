@@ -1,4 +1,4 @@
-import { type ActionState, type AttackKind, emptyActions, type TargetHeight } from './actions';
+import { type ActionState, type AttackKind, emptyActions, LEAD_OF, type TargetHeight } from './actions';
 
 /**
  * Shared, mutable input written by the on-screen touch controls (React
@@ -34,15 +34,25 @@ export const KEY_BINDINGS: Record<string, string> = {
   ShiftRight: 'dash',
   KeyQ: 'switch',
   KeyE: 'high',
+  KeyF: 'lead',
   Tab: 'lock',
   Escape: 'pause',
   KeyP: 'pause',
 };
 
-const ATTACK_KEYS: Record<string, AttackKind> = { punch: 'punch', front: 'front', round: 'round', side: 'side', back: 'back' };
+const ATTACK_KEYS: Record<string, AttackKind> = {
+  punch: 'punch',
+  front: 'front',
+  round: 'round',
+  side: 'side',
+  back: 'back',
+  leadFront: 'leadFront',
+  leadRound: 'leadRound',
+  leadSide: 'leadSide',
+};
 
 // Standard gamepad mapping.
-const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, R3: 11 };
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, R3: 11, UP: 12, LEFT: 14, RIGHT: 15 };
 
 /**
  * Merges keyboard, mouse, touch and gamepad into one ActionState. Edge events
@@ -109,8 +119,10 @@ export class InputManager {
 
   /** Latch a discrete action (also used by touch buttons and tests). */
   press(action: string, height?: TargetHeight) {
-    const atk = ATTACK_KEYS[action];
+    let atk = ATTACK_KEYS[action];
     if (atk) {
+      // Holding the lead modifier (F) turns a rear-leg kick into its lead-leg version.
+      if (this.held.has('lead') && LEAD_OF[atk]) atk = LEAD_OF[atk]!;
       this.edges.attack = atk;
       if (height) this.edges.attackHeight = height;
       return;
@@ -129,6 +141,7 @@ export class InputManager {
     let my = (h.has('up') ? 1 : 0) - (h.has('down') ? 1 : 0);
     s.guard = h.has('guard');
     s.high = h.has('high');
+    s.lead = h.has('lead');
     // Touch.
     const t = this.touch;
     if (Math.hypot(t.moveX, t.moveY) > 0.01) {
@@ -187,6 +200,9 @@ export class InputManager {
     if (edge(PAD.B)) this.press('round');
     if (edge(PAD.Y)) this.press('side');
     if (edge(PAD.RB)) this.press('back');
+    if (edge(PAD.UP)) this.press('leadFront');
+    if (edge(PAD.RIGHT)) this.press('leadRound');
+    if (edge(PAD.LEFT)) this.press('leadSide');
     if (edge(PAD.LT)) this.press('dash');
     if (edge(PAD.R3) || edge(PAD.SELECT)) this.press('switch');
     if (edge(PAD.START)) this.press('pause');

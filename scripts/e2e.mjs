@@ -18,6 +18,9 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 };
 
+// E2E_ONLY=comma,separated,section,names runs a subset (desktop, exchange, compact, classic, pwa, competitive, competitive-mobile, portrait).
+const ONLY = process.env.E2E_ONLY?.split(',') ?? null;
+const runs = (name) => !ONLY || ONLY.includes(name);
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 
 async function open(ctxOpts, query, extraSettings = {}) {
@@ -67,7 +70,7 @@ const waitTicks = (page, n) =>
 const waitPhase = (page, phase) => page.waitForFunction((p) => window.__dojang.session.world.phase === p, phase, { timeout: 90000 });
 
 // ---------------------------------------------------------------- desktop
-{
+if (runs('desktop')) {
   const { ctx, page, errors } = await open({ viewport: { width: 960, height: 540 } }, '?start=normal&ai=off');
   await waitPhase(page, 'fight');
   // Walk toward the opponent (camera-relative: D = screen right in the side-on lock-on view) until in kicking range.
@@ -143,7 +146,7 @@ const waitPhase = (page, phase) => page.waitForFunction((p) => window.__dojang.s
 }
 
 // ------------------------------------------------- AI exchange + result flow
-{
+if (runs('exchange')) {
   const { ctx, page, errors } = await open({ viewport: { width: 960, height: 540 } }, '?start=normal');
   await waitPhase(page, 'fight');
   // Player presses forward and attacks periodically; AI fights back.
@@ -226,7 +229,7 @@ async function touchKit(ctx, page) {
   return { touch, center, setRange, idle, lastAttack };
 }
 
-{
+if (runs('compact')) {
   const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off');
   await waitPhase(page, 'fight');
   const touchUi = await page.$('[data-testid=touch-controls].scheme-compact');
@@ -295,7 +298,8 @@ async function touchKit(ctx, page) {
   await touch('touchStart', [{ id: 5, ...kick }]);
   await touch('touchMove', [{ id: 5, x: kick.x - 25, y: kick.y - 8 }]);
   const wheelOpen = !!(await page.$('[data-testid=kick-wheel]'));
-  await touch('touchMove', [{ id: 5, x: kick.x - 70, y: kick.y - 22 }]);
+  await touch('touchMove', [{ id: 5, x: kick.x - 60, y: kick.y - 20 }]);
+  await touch('touchMove', [{ id: 5, x: kick.x - 110, y: kick.y - 36 }]);
   if (shots) await page.screenshot({ path: `${shots}/mobile-wheel.jpg`, type: 'jpeg', quality: 80 });
   await touch('touchEnd', []);
   await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
@@ -353,11 +357,30 @@ async function touchKit(ctx, page) {
   await waitTicks(page, 14);
   const stance1 = await page.evaluate(() => window.__dojang.session.world.fighters[0].stance);
   check('compact: stance switch button changes stance', stance0 !== stance1, `${stance0}→${stance1}`);
+
+  // Inner ring: lead-leg roundhouse, then it repeats on tap.
+  await setRange(1.05);
+  await touch('touchStart', [{ id: 12, ...kick }]);
+  await touch('touchMove', [{ id: 12, x: kick.x - 20, y: kick.y - 20 }]);
+  await touch('touchMove', [{ id: 12, x: kick.x - 42, y: kick.y - 42 }]);
+  if (shots) await page.screenshot({ path: `${shots}/mobile-wheel-lead.jpg`, type: 'jpeg', quality: 80 });
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a6 = await lastAttack();
+  await idle();
+  const hpLead = (await world(page)).f[1].hp;
+  check('compact: inner ring throws the lead-leg roundhouse and lands', a6.id === 'leadRound' && hpLead < 100, `${a6.id}, hp ${hpLead}`);
+  await setRange(1.05);
+  await touch('touchStart', [{ id: 13, ...kick }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  check('compact: lead-leg selection persists on tap', (await lastAttack()).id === 'leadRound');
+  await idle();
   check('compact: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 
-{
+if (runs('classic')) {
   const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off', { controlScheme: 'classic' });
   await waitPhase(page, 'fight');
   check('classic: classic scheme can be selected', !!(await page.$('[data-testid=touch-controls].scheme-classic')));
@@ -373,12 +396,23 @@ async function touchKit(ctx, page) {
     const hp = (await world(page)).f[1].hp;
     check(`classic: ${label} button lands`, a.id === id && hp < 100, `${a.id}, hp ${hp}`);
   }
+  // Rear/Lead chip turns Round into the lead-leg roundhouse.
+  const leadChip = await center('[aria-label="Kicking leg"]');
+  await touch('touchStart', [{ id: 2, ...leadChip }]);
+  await touch('touchEnd', []);
+  await setRange(1.05);
+  const rb = await center('[aria-label="Round"]');
+  await touch('touchStart', [{ id: 3, ...rb }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  check('classic: Lead chip switches Round to the lead-leg roundhouse', (await lastAttack()).id === 'leadRound');
+  await idle();
   if (shots) await page.screenshot({ path: `${shots}/mobile-classic.jpg`, type: 'jpeg', quality: 80 });
   check('classic: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 }
 
-{
+if (runs('pwa')) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   const res = await page.goto(base + 'manifest.webmanifest');
@@ -388,8 +422,137 @@ async function touchKit(ctx, page) {
   await ctx.close();
 }
 
+// ------------------------------------------------ competitive: full match
+if (runs('competitive')) {
+  const { ctx, page, errors } = await (async () => {
+    const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
+    await ctx.addInitScript(() => {
+      try {
+        if (sessionStorage.getItem('e2e-init')) return;
+        sessionStorage.setItem('e2e-init', '1');
+        localStorage.setItem('dojang.settings.v1', JSON.stringify({ quality: 'low', showPerf: false, volume: 0 }));
+      } catch {}
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    await page.goto(base + '?ai=off');
+    return { ctx, page, errors };
+  })();
+  // Menu: choose Competitive Sparring, then a difficulty.
+  await page.click('[data-testid=mode-competitive]');
+  await page.click('[data-testid=start-normal]');
+  await page.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+  await waitPhase(page, 'fight');
+  check('competitive: started from the menu with competitive rules', await page.evaluate(() => window.__dojang.session.world.rules.id === 'competitive'));
+  const setRange = (gap) =>
+    page.evaluate((gap) => {
+      const [a, b] = window.__dojang.session.world.fighters;
+      a.x = 0; a.z = 0; a.yaw = 0; b.x = 0; b.z = gap; b.yaw = Math.PI;
+      a.stamina = b.stamina = 100;
+    }, gap);
+  const settle = () => page.waitForFunction(() => {
+    const w = window.__dojang.session.world;
+    return w.phase === 'fight' && w.fighters[0].state === 'idle' && w.fighters[1].state === 'idle';
+  }, null, { timeout: 30000 });
+  /** Throw a technique (with optional held modifiers) and wait until it has started and finished. */
+  const throwKey = async (key, mods = []) => {
+    const serial = await page.evaluate(() => window.__dojang.session.world.fighters[0].attackSerial);
+    for (const m of mods) await page.keyboard.down(m);
+    await page.keyboard.press(key);
+    for (const m of mods) await page.keyboard.up(m);
+    await page.waitForFunction((s) => window.__dojang.session.world.fighters[0].attackSerial > s, serial, { timeout: 15000 }).catch(() => {});
+    const id = await page.evaluate(() => window.__dojang.session.world.fighters[0].attack?.move.id ?? null);
+    await settle();
+    return id;
+  };
+  // The HUD publishes at 12 Hz: wait until the scoreboard shows the simulation's points.
+  const score = async (i) => {
+    await page
+      .waitForFunction((i) => Number(document.querySelector(`[data-testid=score-${i}]`)?.textContent) === window.__dojang.session.world.points[i], i, { timeout: 5000 })
+      .catch(() => {});
+    return page.$eval(`[data-testid=score-${i}]`, (e) => Number(e.textContent));
+  };
+
+  await setRange(1.0);
+  await throwKey('KeyL');
+  const s1 = await score(0);
+  check('competitive: body roundhouse scores +2 on the scoreboard', s1 === 2, `${s1}`);
+  if (shots) await page.screenshot({ path: `${shots}/competitive-desktop.jpg`, type: 'jpeg', quality: 80 });
+
+  await setRange(0.95);
+  await throwKey('KeyL', ['KeyE']);
+  const s2 = await score(0);
+  check('competitive: head roundhouse adds +3', s2 === 5, `${s2}`);
+
+  await setRange(1.0);
+  await throwKey('KeyI', ['KeyE']);
+  const s3 = await score(0);
+  check('competitive: turning head kick (back kick) adds +6', s3 === 11, `${s3}`);
+
+  await setRange(1.05);
+  const leadId = await throwKey('KeyL', ['KeyF']);
+  const s4 = await score(0);
+  check('competitive: F + L throws the lead roundhouse and scores +2', leadId === 'leadRound' && s4 === 13, `${leadId} ${s4}`);
+
+  // Penalty: step over the boundary line.
+  await page.evaluate(() => {
+    const f = window.__dojang.session.world.fighters[0];
+    f.x = 0;
+    f.z = -3.95;
+  });
+  await page.waitForSelector('[data-testid=gj-0]', { timeout: 10000 }).catch(() => {});
+  const gj = await page.$('[data-testid=gj-0]');
+  const opp = await score(1);
+  check('competitive: crossing the boundary gives a gam-jeom (+1 to the opponent)', !!gj && opp === 1, `opp ${opp}`);
+  if (shots) await page.screenshot({ path: `${shots}/competitive-penalty.jpg`, type: 'jpeg', quality: 80 });
+
+  // Finish rounds 1 and 2 on time (player ahead) to win 2-0.
+  for (let r = 0; r < 2; r++) {
+    await page.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+    if (r === 1) {
+      await setRange(1.0);
+      await throwKey('KeyK');
+    }
+    await page.evaluate(() => (window.__dojang.session.world.roundTicksLeft = 2));
+    await page.waitForFunction(() => ['round-over', 'match-over'].includes(window.__dojang.session.world.phase), null, { timeout: 30000 });
+  }
+  await page.waitForSelector('[data-testid=comp-summary]', { timeout: 30000 }).catch(() => {});
+  const summary = await page.$eval('[data-testid=comp-summary]', (e) => e.textContent).catch(() => '');
+  check('competitive: result screen shows rounds, techniques and penalties', /R1/.test(summary) && /R2/.test(summary) && /Turning head kick/.test(summary) && /Crossing the boundary line/.test(summary), summary.slice(0, 120));
+  const winner = await page.evaluate(() => window.__dojang.session.world.matchWinner);
+  check('competitive: player wins the match 2-0', winner === 0);
+  if (shots) await page.screenshot({ path: `${shots}/competitive-result.jpg`, type: 'jpeg', quality: 80 });
+  await page.click('[data-testid=rematch]');
+  await page.waitForFunction(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.points[0] === 0, null, { timeout: 10000 }).catch(() => {});
+  const rr = await page.evaluate(() => ({ r: window.__dojang.session.world.round, p: [...window.__dojang.session.world.points], h: window.__dojang.session.competitive.history.length }));
+  check('competitive: rematch resets rounds, points and history', rr.r === 1 && rr.p[0] === 0 && rr.h === 0, JSON.stringify(rr));
+  await page.keyboard.press('Escape');
+  await page.click('text=Main menu');
+  const menu = await page.waitForSelector('[data-testid=mode-competitive]', { timeout: 10000 }).catch(() => null);
+  check('competitive: return to the main menu', !!menu);
+  check('competitive: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+if (runs('competitive-mobile')) {
+  const { ctx, page, errors } = await open(PHONE, '?start=normal&mode=competitive');
+  await waitPhase(page, 'fight');
+  await waitTicks(page, 200);
+  const info = await page.evaluate(() => ({
+    hud: document.querySelector('.hud-top').getBoundingClientRect().height,
+    scores: document.querySelectorAll('.score').length,
+    scheme: !!document.querySelector('.scheme-compact'),
+  }));
+  check('competitive mobile: compact HUD stays slim with scores (≤ 30 px)', info.hud <= 30 && info.scores === 2 && info.scheme, JSON.stringify(info));
+  if (shots) await page.screenshot({ path: `${shots}/competitive-mobile.jpg`, type: 'jpeg', quality: 80 });
+  check('competitive mobile: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ------------------------------------------------------- portrait prompt
-{
+if (runs('portrait')) {
   const { ctx, page } = await open({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, '?start=normal&ai=off');
   const prompt = await page.waitForSelector('[data-testid=rotate-prompt]', { timeout: 10000 }).catch(() => null);
   check('portrait: rotate prompt shown', !!prompt);

@@ -20,6 +20,10 @@ export interface HudState {
   high: boolean;
   lockOn: boolean;
   stance: 'orthodox' | 'southpaw';
+  mode: 'arcade' | 'competitive';
+  points: [number, number];
+  gamjeom: [number, number];
+  lead: boolean;
 }
 
 export interface Toast {
@@ -27,7 +31,7 @@ export interface Toast {
   text: string;
   sub?: string;
   side: 0 | 1 | null;
-  kind: 'call' | 'hit' | 'info';
+  kind: 'call' | 'hit' | 'info' | 'score' | 'penalty';
 }
 
 export interface Settings {
@@ -39,7 +43,7 @@ export interface Settings {
   /** Touch layout: compact (one Kick button + technique wheel) or classic (one button per technique). */
   controlScheme: 'compact' | 'classic';
   /** Technique fired by the compact Kick button (persists). */
-  selectedKick: 'front' | 'round' | 'side' | 'back';
+  selectedKick: 'front' | 'round' | 'side' | 'back' | 'leadFront' | 'leadRound' | 'leadSide';
   /** Dismissed the "add to home screen" hint. */
   pwaHintDismissed: boolean;
 }
@@ -60,6 +64,7 @@ function loadSettings(): Settings {
 interface GameStore {
   screen: 'menu' | 'match';
   difficulty: Difficulty;
+  mode: 'arcade' | 'competitive';
   paused: boolean;
   loading: boolean;
   loadError: string | null;
@@ -67,7 +72,7 @@ interface GameStore {
   toasts: Toast[];
   perf: PerfSnapshot | null;
   settings: Settings;
-  startMatch(d: Difficulty): void;
+  startMatch(d: Difficulty, mode?: 'arcade' | 'competitive'): void;
   toMenu(): void;
   setPaused(p: boolean): void;
   setHud(h: HudState): void;
@@ -82,6 +87,7 @@ let toastId = 1;
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: 'menu',
   difficulty: 'normal',
+  mode: 'arcade',
   paused: false,
   loading: false,
   loadError: null,
@@ -89,7 +95,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toasts: [],
   perf: null,
   settings: loadSettings(),
-  startMatch: (difficulty) => set({ screen: 'match', difficulty, paused: false, hud: null, toasts: [] }),
+  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [] }),
   toMenu: () => set({ screen: 'menu', paused: false, hud: null, toasts: [] }),
   setPaused: (paused) => set({ paused }),
   setHud: (hud) => set({ hud }),

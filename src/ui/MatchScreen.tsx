@@ -23,6 +23,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
   const sessionRef = useRef<GameSession | null>(null);
   const difficulty = useGameStore((s) => s.difficulty);
   const quality = useGameStore((s) => s.settings.quality);
+  const mode = useGameStore((s) => s.mode);
 
   useEffect(() => {
     const st = useGameStore.getState();
@@ -35,6 +36,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
       quality: resolveQuality(quality),
       difficulty,
       aiEnabled: params.get('ai') !== 'off',
+      mode: useGameStore.getState().mode,
       callbacks: {
         onHud: (h) => useGameStore.getState().setHud(h),
         onToast: (t, ms) => useGameStore.getState().pushToast(t, ms),
@@ -67,7 +69,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
     };
     // Session is rebuilt only when the match configuration changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, quality]);
+  }, [difficulty, quality, mode]);
 
   const paused = useGameStore((s) => s.paused);
   useEffect(() => {
