@@ -124,7 +124,9 @@ export class InputManager {
       // Holding the lead modifier (F) turns a rear-leg kick into its lead-leg version.
       if (this.held.has('lead') && LEAD_OF[atk]) atk = LEAD_OF[atk]!;
       this.edges.attack = atk;
+      // Latch the target height at press time so a quick modifier tap is never lost.
       if (height) this.edges.attackHeight = height;
+      else if (this.held.has('high') || this.touch.high) this.edges.attackHeight = 'head';
       return;
     }
     if (action === 'dash') this.edges.dash = true;

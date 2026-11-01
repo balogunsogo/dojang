@@ -42,7 +42,7 @@ for (const d of devices) {
   await page.evaluate(() => new Promise((r) => { const w = window.__dojang.session.world; const t = w.tick; const id = setInterval(() => { if (w.tick - t > 240) { clearInterval(id); r(); } }, 50); }));
   const data = await page.evaluate(() => {
     const W = innerWidth, H = innerHeight, G = 4;
-    const sel = '.hud-top, .hud-status, .hud-mini, .tb, .tbtn, .kick-main, .wheel, .chip, .stick-base, .score';
+    const sel = '.hud-top, .hud-status, .hud-mini, .tb, .tbtn, .kick-main, .wheel, .chip, .stick-base, .pts';
     const boxes = [...document.querySelectorAll(sel)]
       .filter((e) => { const cs = getComputedStyle(e); return cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.05; })
       .map((e) => e.getBoundingClientRect())

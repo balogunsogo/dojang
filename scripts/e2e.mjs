@@ -528,8 +528,10 @@ if (runs('competitive')) {
   await page.waitForFunction(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.points[0] === 0, null, { timeout: 10000 }).catch(() => {});
   const rr = await page.evaluate(() => ({ r: window.__dojang.session.world.round, p: [...window.__dojang.session.world.points], h: window.__dojang.session.competitive.history.length }));
   check('competitive: rematch resets rounds, points and history', rr.r === 1 && rr.p[0] === 0 && rr.h === 0, JSON.stringify(rr));
+  await page.waitForSelector('[data-testid=result]', { state: 'detached', timeout: 10000 }).catch(() => {});
   await page.keyboard.press('Escape');
-  await page.click('text=Main menu');
+  await page.waitForSelector('text=Paused', { timeout: 10000 });
+  await page.click('.panel >> text=Main menu');
   const menu = await page.waitForSelector('[data-testid=mode-competitive]', { timeout: 10000 }).catch(() => null);
   check('competitive: return to the main menu', !!menu);
   check('competitive: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -542,7 +544,7 @@ if (runs('competitive-mobile')) {
   await waitTicks(page, 200);
   const info = await page.evaluate(() => ({
     hud: document.querySelector('.hud-top').getBoundingClientRect().height,
-    scores: document.querySelectorAll('.score').length,
+    scores: document.querySelectorAll('.hud-top .pts').length,
     scheme: !!document.querySelector('.scheme-compact'),
   }));
   check('competitive mobile: compact HUD stays slim with scores (≤ 30 px)', info.hud <= 30 && info.scores === 2 && info.scheme, JSON.stringify(info));

@@ -44,7 +44,7 @@ export function Hud() {
           <Bar value={hud.stamina[0]} max={100} cls="st" />
         </div>
         {comp && (
-          <div className="score chung" data-testid="score-0">
+          <div className="pts chung" data-testid="score-0">
             {hud.points[0]}
           </div>
         )}
@@ -58,7 +58,7 @@ export function Hud() {
           </span>
         </div>
         {comp && (
-          <div className="score hong" data-testid="score-1">
+          <div className="pts hong" data-testid="score-1">
             {hud.points[1]}
           </div>
         )}
