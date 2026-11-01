@@ -216,6 +216,14 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
     rLeg: { p: v(-0.16, ANKLE_H + 0.035, -0.28), point: 0.45 },
   });
 
+  // Lead-leg anticipation: weight back onto the rear leg, lead heel rises.
+  const loadRear = pose(STANCE, {
+    hips: v(-0.05, 0.85, -0.07),
+    yaw: STANCE.yaw - 4,
+    pitch: STANCE.pitch - 1,
+    lLeg: { p: v(0.05, ANKLE_H + 0.03, 0.29), point: 0.45 },
+  });
+
   /** Shared recovery builder: crisp retract after a hit, rebound after a block, follow-through after a whiff. */
   const recover = (chamber: Pose, extend: Pose, follow: Pose, endYaw = STANCE.yaw): Key[] => {
     const end = pose(STANCE, { yaw: endYaw });
@@ -362,6 +370,109 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         { t: 0, pose: STANCE },
         { t: s(0.35), pose: pivot },
         { t: s(0.8), pose: chamber },
+        { t: a(0.6), pose: extend, ease: 'snap' },
+        { t: a(1), pose: extend },
+        ...recover(chamber, extend, follow),
+      ];
+    }
+    // ---- Lead-leg techniques (front/left leg in orthodox) -------------------
+    // Weight loads back onto the rear leg, the rear foot pivots, and the body
+    // turns the opposite way to the rear-leg versions (clockwise from above),
+    // so the lead hip, not the rear hip, drives the kick. Shorter hip drive
+    // and a quicker re-plant of the lead foot.
+    case 'leadFront': {
+      const chamber = pose(STANCE, {
+        hips: v(-0.03 + j(0.01), 0.88, -0.05),
+        yaw: -32 + j(4),
+        pitch: -5 + j(2),
+        rLeg: { yaw: -62, pole: dirYaw(-52), point: 0.15 },
+        lLeg: { p: v(0.06, (head ? 0.74 : 0.62) + j(0.03), 0.36), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
+        lArm: { p: v(0.18, 0.08, 0.2) },
+      });
+      const extend = pose(chamber, {
+        hips: v(-0.02, 0.9, 0.0),
+        pitch: head ? -15 : -10,
+        rLeg: { point: 0.3 },
+        lLeg: { p: ankleFor(imp, 0.11, 0.02), pole: v(0, 1, 0.3), point: 0.95 },
+        lArm: { p: v(0.22, 0.0, 0.02), pole: v(0.8, -1, 0) },
+      });
+      const follow = pose(extend, { pitch: 2, hips: v(0, 0.87, 0.08), lLeg: { p: v(0.06, 0.5, imp[2] - 0.05), pole: v(0, 0.4, 1), point: 0.6 } });
+      return [
+        { t: 0, pose: STANCE },
+        { t: s(0.3), pose: loadRear },
+        { t: s(0.7), pose: chamber },
+        { t: a(0.5), pose: extend, ease: 'snap' },
+        { t: a(1), pose: extend },
+        ...recover(chamber, extend, follow),
+      ];
+    }
+    case 'leadRound': {
+      const chamber = pose(STANCE, {
+        hips: v(-0.04, 0.9 + j(0.01), -0.03),
+        yaw: -78 + j(5),
+        pitch: -2 + j(2),
+        roll: 8 + j(3),
+        twist: 10,
+        rLeg: { yaw: -115, pole: dirYaw(-105), point: 0.2 },
+        lLeg: { p: v(0.36, (head ? 1.08 : 0.94) + j(0.03), 0.3), pole: v(0, 0.3, 1), point: 0.8, yaw: 0 },
+        lArm: { p: v(0.2, 0.06, 0.12) },
+      });
+      const extend = pose(chamber, {
+        hips: v(-0.06, 0.92, 0.02),
+        yaw: -100,
+        pitch: head ? -12 : -7,
+        roll: head ? 28 : 22,
+        twist: 18,
+        rLeg: { yaw: -140, pole: dirYaw(-130), point: 0.35 },
+        lLeg: { p: ankleFor(imp, 0.1, 0.0), pole: v(-0.7, 0.7, 0), point: 1 },
+        rArm: { p: v(-0.18, 0.12, 0.26) },
+        lArm: { p: v(0.3, -0.05, -0.1), pole: v(1, -0.5, 0) },
+      });
+      const follow = pose(extend, {
+        yaw: -132,
+        roll: 12,
+        twist: 24,
+        rLeg: { yaw: -165, pole: dirYaw(-150) },
+        lLeg: { p: v(-0.28, imp[1] - 0.25, imp[2] - 0.3), pole: v(-0.6, 0.8, 0), point: 0.9 },
+      });
+      return [
+        { t: 0, pose: STANCE },
+        { t: s(0.28), pose: loadRear },
+        { t: s(0.72), pose: chamber },
+        { t: a(0.5), pose: extend, ease: 'snap' },
+        { t: a(1), pose: extend },
+        ...recover(pose(chamber, { yaw: -60 }), extend, follow),
+      ];
+    }
+    case 'leadSide': {
+      const pivot = pose(STANCE, {
+        yaw: -64,
+        hips: v(-0.04, 0.86, -0.04),
+        rLeg: { yaw: -110, pole: dirYaw(-100), point: 0.2 },
+        lLeg: { p: v(0.06, 0.26, 0.3), pole: v(0, 0.6, 1), point: 0.3 },
+      });
+      const chamber = pose(STANCE, {
+        hips: v(-0.04, 0.89 + j(0.01), -0.04),
+        yaw: -86 + j(4),
+        roll: 10 + j(3),
+        twist: 14,
+        rLeg: { yaw: -140, pole: dirYaw(-130), point: 0.15 },
+        lLeg: { p: v(0.04, (head ? 0.92 : 0.82) + j(0.03), 0.18), pole: v(-0.6, 0.6, 0.6), point: 0.25, yaw: -90 },
+        rArm: { p: v(-0.16, 0.12, 0.26) },
+      });
+      const extend = pose(chamber, {
+        hips: v(-0.1, 0.9, -0.02),
+        yaw: -90,
+        roll: head ? 40 : 32,
+        rLeg: { p: v(-0.1, ANKLE_H, -0.28), yaw: -160, pole: dirYaw(-140), point: 0.25 },
+        lLeg: { p: ankleFor(imp, 0.04, 0.03), pole: v(-1, 0.15, 0), point: 0.25 },
+        lArm: { p: v(0.1, -0.12, 0.05), pole: v(1, -0.5, 0) },
+      });
+      const follow = pose(extend, { hips: v(-0.08, 0.88, 0.06), roll: 24, lLeg: { p: v(0.02, imp[1] - 0.3, imp[2] - 0.15) } });
+      return [
+        { t: 0, pose: STANCE },
+        { t: s(0.32), pose: pivot },
+        { t: s(0.78), pose: chamber },
         { t: a(0.6), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
         ...recover(chamber, extend, follow),

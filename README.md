@@ -6,12 +6,15 @@ A semi-realistic 3D Taekwondo sparring game for desktop and mobile browsers. Bui
 
 ## Status
 
-**Phases 0, 1 and 1.5 are done** (Phase 1.5 refined the animation and the mobile controls and HUD after UAT; see [docs/PHASE_1_5.md](docs/PHASE_1_5.md)). You can spar a full arcade match against an AI in a 3D dojang using keyboard, gamepad or touch controls. See [docs/HANDOFF.md](docs/HANDOFF.md) for exactly what works, what was tested and what comes next.
+**Phases 0, 1, 1.5 and 2 are done.** Phase 2 adds WT-style Competitive sparring, lead-leg kicks and a smarter AI; see [docs/PHASE_2.md](docs/PHASE_2.md). You can spar full Arcade or Competitive matches against an AI in a 3D dojang using keyboard, gamepad or touch controls. See [docs/HANDOFF.md](docs/HANDOFF.md) for exactly what works, what was tested and what comes next.
 
 | Works now | Planned |
 |---|---|
-| Footwork, dash, stance switch, guard | Competitive WT-style point scoring (Phase 2) |
-| Front, roundhouse, side and back kicks, straight punch, head/body targeting | Tuned AI difficulty and counterattack depth (Phase 2) |
+| Footwork, dash, stance switch, guard | |
+| Competitive WT-style points, gam-jeom, best of three, results | |
+| Lead-leg front, roundhouse and side kicks | |
+| Front, roundhouse, side and back kicks, straight punch, head/body targeting | |
+| Layered AI: white, red and black belt | |
 | Planted footwork, varied idle, outcome-aware kicks, procedural reactions | |
 | Compact and Classic touch schemes, slim HUD, optional fullscreen PWA | |
 | Frame data (startup/active/recovery), stamina, counter hits, hit stop, combos on hit | Touch gestures and hybrid control mode (Phase 3) |
@@ -38,7 +41,7 @@ npm run build && npm run preview
 
 ### Controls
 
-- **Keyboard:** `WASD` move (camera-relative; in the default side view `D` steps toward the opponent), `Shift` dash, `J` punch, `K` front kick, `L` roundhouse, `U` side kick, `I` back kick, hold `E` for head height, hold `Space` to guard, `Q` switch stance, `Tab` lock-on, mouse drag or wheel for the camera, `Esc` pause, `` ` `` perf overlay.
+- **Keyboard:** `WASD` move (camera-relative; in the default side view `D` steps toward the opponent), `Shift` dash, `J` punch, `K` front kick, `L` roundhouse, `U` side kick, `I` back kick, hold `E` for head height, hold `F` with `K`/`L`/`U` for lead-leg kicks, hold `Space` to guard, `Q` switch stance, `Tab` lock-on, mouse drag or wheel for the camera, `Esc` pause, `` ` `` perf overlay.
 - **Touch (Compact, default):** floating joystick on the left; **Kick** repeats the selected kick, and sliding from it opens a technique wheel (release on Front/Round/Side/Back; slide past the outer ring for head height); Guard (hold), Dash, Punch, ⇄ stance switch and a Body/Head chip; drag anywhere else to orbit the camera. **Classic** (one button per technique) is in Settings or the pause menu.
 - **Gamepad:** left stick move, right stick camera, X/A/B/Y/RB techniques, LB guard, RT head, LT dash.
 
@@ -47,6 +50,7 @@ npm run build && npm run preview
 | Parameter | Effect |
 |---|---|
 | `?start=easy\|normal\|hard` | Skip the menu and start a match |
+| `&mode=competitive` | With `start`: Competitive rules |
 | `?ai=off` | Opponent stands still (testing) |
 | `?perf=1` | Show the performance overlay |
 | `?touch=1` | Force touch controls on desktop |

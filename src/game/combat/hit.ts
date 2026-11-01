@@ -28,3 +28,14 @@ export function inGuardArc(defYaw: number, defX: number, defZ: number, attX: num
   const dot = (Math.sin(defYaw) * dx + Math.cos(defYaw) * dz) / m;
   return dot >= Math.cos((arcDeg * Math.PI) / 180);
 }
+
+/** Legs below the trunk protector (prohibited target in Competitive). */
+export const LEGS = { bottom: 0.15, top: 0.92, radius: 0.17 } as const;
+
+/** Does a swept strike touch the defender's legs (below the waist)? */
+export function testLegs(a: V3, b: V3, r: number, defX: number, defZ: number): boolean {
+  const l0: V3 = [defX, LEGS.bottom, defZ];
+  const l1: V3 = [defX, LEGS.top, defZ];
+  const rr = r + LEGS.radius;
+  return distSegmentSegmentSq(a, b, l0, l1) <= rr * rr;
+}

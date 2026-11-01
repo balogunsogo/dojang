@@ -1,14 +1,8 @@
 import { type PointerEvent as RPointerEvent, type ReactNode, useRef, useState } from 'react';
 import type { InputManager } from '../game/input/InputManager';
 import { useGameStore } from '../store/useGameStore';
-import { pickWheel, WHEEL_HEAD_RADIUS, WHEEL_ITEMS, WHEEL_RADIUS, type WheelKick, type WheelPick } from './wheel';
+import { KICK_LABEL, pickWheel, WHEEL_HEAD_RADIUS, WHEEL_ITEMS, WHEEL_LEAD_EDGE, WHEEL_LEAD_RADIUS, WHEEL_RADIUS, type WheelKick, type WheelPick } from './wheel';
 
-const KICK_LABEL: Record<WheelKick, [string, string]> = {
-  front: ['Front', 'Ap'],
-  round: ['Round', 'Dollyeo'],
-  side: ['Side', 'Yeop'],
-  back: ['Back', 'Dwi'],
-};
 const HOLD_MS = 260;
 const TAP_SLOP = 14;
 
@@ -36,6 +30,7 @@ export function TouchControls({ input }: { input: InputManager }) {
   const baseRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
   const [high, setHigh] = useState(false);
+  const [lead, setLead] = useState(false);
   const R = 52;
 
   const stickDown = (e: RPointerEvent<HTMLDivElement>) => {
@@ -117,9 +112,10 @@ export function TouchControls({ input }: { input: InputManager }) {
       ) : (
         <div className="cluster classic">
           <TapButton cls="b-punch" label="Punch" onTap={() => input.press('punch')} />
-          <TapButton cls="b-front" label="Front" onTap={() => input.press('front')} />
-          <TapButton cls="b-round big" label="Round" onTap={() => input.press('round')} />
-          <TapButton cls="b-side" label="Side" onTap={() => input.press('side')} />
+          <TapButton cls="b-front" label={lead ? 'L·Front' : 'Front'} aria="Front" onTap={() => input.press(lead ? 'leadFront' : 'front')} />
+          <TapButton cls="b-round big" label={lead ? 'L·Round' : 'Round'} aria="Round" onTap={() => input.press(lead ? 'leadRound' : 'round')} />
+          <TapButton cls="b-side" label={lead ? 'L·Side' : 'Side'} aria="Side" onTap={() => input.press(lead ? 'leadSide' : 'side')} />
+          <TapButton cls={`b-lead chip ${lead ? 'on' : ''}`} label={lead ? 'Lead' : 'Rear'} aria="Kicking leg" onTap={() => setLead((v) => !v)} />
           <TapButton cls="b-back" label="Back" onTap={() => input.press('back')} />
           <HoldButton cls="b-guard" label="Guard" onChange={(v) => (t.guard = v)} />
           <TapButton cls="b-dash" label="Dash" onTap={() => input.press('dash')} />
@@ -206,14 +202,16 @@ function CompactCluster({ input, high, toggleHigh }: { input: InputManager; high
       {open && (
         <div className="wheel" data-testid="kick-wheel">
           <div className="wheel-ring head" style={{ width: WHEEL_HEAD_RADIUS * 2, height: WHEEL_HEAD_RADIUS * 2 }} />
+          <div className="wheel-ring lead" style={{ width: WHEEL_LEAD_EDGE * 2, height: WHEEL_LEAD_EDGE * 2 }} />
           {WHEEL_ITEMS.map((it) => {
             const a = (it.angle * Math.PI) / 180;
             const on = pick?.kind === it.kind;
             return (
               <div
                 key={it.kind}
-                className={`wheel-item ${on ? 'on' : ''} ${on && pick?.head ? 'head' : ''} ${it.kind === selected ? 'sel' : ''}`}
-                style={{ transform: `translate(${Math.cos(a) * WHEEL_RADIUS}px, ${-Math.sin(a) * WHEEL_RADIUS}px)` }}
+                className={`wheel-item ring-${it.ring} ${on ? 'on' : ''} ${on && pick?.head ? 'head' : ''} ${it.kind === selected ? 'sel' : ''}`}
+                data-kind={it.kind}
+                style={{ transform: `translate(${Math.cos(a) * (it.ring === 'lead' ? WHEEL_LEAD_RADIUS : WHEEL_RADIUS)}px, ${-Math.sin(a) * (it.ring === 'lead' ? WHEEL_LEAD_RADIUS : WHEEL_RADIUS)}px)` }}
               >
                 <span className="l">{it.label}</span>
                 <span className="s">{on && pick?.head ? 'HEAD' : it.korean}</span>

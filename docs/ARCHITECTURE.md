@@ -21,8 +21,9 @@ src/
       Fighter.ts        per-fighter state machine, footwork, stamina
       hit.ts            swept-sphere vs capsule/sphere tests, guard arc
       CombatWorld.ts    two fighters, tick, strike resolution, rounds, events
-    rules/rules.ts      Ruleset interface; ArcadeRules
-    ai/AIController.ts  difficulty profiles → FighterIntent
+    rules/rules.ts      Ruleset interface (+ optional RuleHooks); ArcadeRules
+    rules/competitive/  WT-inspired ruleset: config, validation, scoring, rounds, CompetitiveRules
+    ai/AIController.ts  layered AI (perception delay, opponent model, reactive/punish/tactical) → FighterIntent
     anim/               character animation (Three.js, reads sim state)
       rig.ts            bone map, world-space helpers, analytic two-bone IK
       poses.ts          procedural Taekwondo key poses, keyframe sampling, mirroring
@@ -61,6 +62,18 @@ R3F useFrame drives frame(); R3F renders the scene.
 ```
 
 React never sits inside the combat loop. Components subscribe to a throttled HUD snapshot, and touch controls write straight into `InputManager.touch` without using React state.
+
+## Competitive rules integration (Phase 2)
+
+`CombatWorld` calls optional `Ruleset.hooks`:
+- `onAttackStart`: detects attacks after Kal-yeo
+- `judgeContact`: validity and points for every clean contact
+- `afterContact`: knockdowns
+- `onIllegalContact`: kicks below the waist
+- `afterTick`: boundary, falls, point gap, golden round
+- `decideRound`, `matchResult`, `roundLength`
+
+The world also has a `break` phase (Kal-yeo: the clock stops, techniques started during it are detected) and a public `endRound()`. Arcade provides no hooks.
 
 ## Key interfaces
 

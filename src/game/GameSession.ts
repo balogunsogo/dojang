@@ -13,7 +13,8 @@ import { CHARACTERS, type CharacterDef, type CharacterInstance, createCharacter,
 import { buildDojang, type DojangHandle } from './render/Dojang';
 import { Effects } from './render/Effects';
 import { DynamicResolution, type QualityProfile } from './render/quality';
-import { ArcadeRules } from './rules/rules';
+import { CompetitiveRules } from './rules/competitive/CompetitiveRules';
+import { ArcadeRules, type Ruleset } from './rules/rules';
 import type { HudState, Toast } from '../store/useGameStore';
 import type { PerfSnapshot } from './perf/PerfMonitor';
 
@@ -32,8 +33,11 @@ export interface SessionOptions {
   quality: QualityProfile;
   difficulty: Difficulty;
   aiEnabled: boolean;
+  mode: MatchMode;
   callbacks: SessionCallbacks;
 }
+
+export type MatchMode = 'arcade' | 'competitive';
 
 interface Prev {
   x: number;
@@ -73,7 +77,8 @@ export class GameSession {
 
   constructor(o: SessionOptions) {
     this.o = o;
-    this.world = new CombatWorld(ArcadeRules, [this.defs[0].stats, this.defs[1].stats]);
+    const rules: Ruleset = o.mode === 'competitive' ? new CompetitiveRules() : ArcadeRules;
+    this.world = new CombatWorld(rules, [this.defs[0].stats, this.defs[1].stats]);
     this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
     this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
   }
@@ -89,7 +94,7 @@ export class GameSession {
       this.chars.push(c);
       this.anims.push(new FighterAnimator(c.group, c.model, c.clips, i + 1));
     }
-    this.fx = new Effects(!this.o.quality.shadows);
+    this.fx = new Effects(!this.o.quality.shadows, this.world.rules.boundary);
     this.o.scene.add(this.fx.group);
     this.syncPrev();
     this.ready = true;
@@ -108,9 +113,16 @@ export class GameSession {
     this.lastPhase = '';
   }
 
-  /** Map device actions (camera-relative) to a world-space fighter intent. */
+  /** Competitive rules instance (null in Arcade). */
+  get competitive(): CompetitiveRules | null {
+    return this.world.rules instanceof CompetitiveRules ? this.world.rules : null;
+  }
+
+  private readonly pIntent: FighterIntent = emptyIntent();
+
+  /** Map device actions (camera-relative) to a world-space fighter intent (reused object: no per-tick allocation). */
   private playerIntent(a: ActionState): FighterIntent {
-    const intent = emptyIntent();
+    const intent = this.pIntent;
     const yaw = this.camRig.viewYaw;
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
@@ -212,6 +224,7 @@ export class GameSession {
     if (w.phase !== this.lastPhase) {
       if (w.phase === 'intro') toast({ text: `Round ${w.round}`, sub: 'Joon-bi! (Ready)', side: null, kind: 'call' }, 1600);
       if (w.phase === 'fight' && this.lastPhase === 'intro') toast({ text: 'Shi-jak!', sub: 'Begin', side: null, kind: 'call' }, 900);
+      if (w.phase === 'fight' && this.lastPhase === 'break') toast({ text: 'Kye-sok!', sub: 'Continue', side: null, kind: 'call' }, 800);
       this.lastPhase = w.phase;
     }
     for (const e of w.events) this.onEvent(e);
@@ -230,6 +243,14 @@ export class GameSession {
         audio.hit(e.zone, heavy);
         this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
         this.camRig.addShake(heavy ? 0.07 : 0.035);
+        if (e.valid !== undefined) {
+          // Competitive: say exactly what scored, or why it did not.
+          if (e.valid) {
+            audio.score(e.points);
+            toast({ text: `+${e.points} ${e.label}`, side: e.attacker, kind: 'score' }, 1300);
+          } else toast({ text: 'No point', sub: e.reason, side: e.attacker, kind: 'info' }, 1000);
+          break;
+        }
         if (e.counter) toast({ text: 'Counter!', side: e.attacker, kind: 'hit' });
         else if (e.zone === 'head') toast({ text: 'Head kick!', side: e.attacker, kind: 'hit' });
         else if (e.move.turning) toast({ text: 'Turning kick!', side: e.attacker, kind: 'hit' });
@@ -249,10 +270,25 @@ export class GameSession {
         break;
       case 'round-end': {
         audio.bell(3);
-        const who = e.winner === null ? 'Draw' : `${this.defs[e.winner].name.split(' ').pop()} wins the round`;
-        toast({ text: 'Keu-man!', sub: `${who}${e.reason === 'time' ? ' (time)' : ''}`, side: null, kind: 'call' }, 2600);
+        const who = e.winner === null ? 'Round drawn' : `${this.defs[e.winner].short} wins the round`;
+        const why = e.detail ?? (e.reason === 'time' ? 'Time' : e.reason === 'ko' ? 'K.O.' : '');
+        toast({ text: 'Keu-man!', sub: `${who}${why ? ` — ${why}` : ''}`, side: null, kind: 'call' }, 2600);
         break;
       }
+      case 'penalty': {
+        audio.penalty();
+        const opp = 1 - e.fighter;
+        toast({ text: `Gam-jeom · ${this.defs[e.fighter].short}`, sub: `${e.label} — +${e.pointsToOpponent} ${this.defs[opp].short}`, side: e.fighter, kind: 'penalty' }, 1800);
+        if (e.reason === 'boundary') this.fx?.flashBoundary();
+        break;
+      }
+      case 'stoppage':
+        toast({ text: 'Kal-yeo!', sub: e.reason, side: null, kind: 'call' }, 900);
+        break;
+      case 'down':
+        this.camRig.addShake(0.06);
+        if (e.cause === 'knockdown') toast({ text: 'Knockdown', sub: `${this.defs[e.fighter].short} is down`, side: null, kind: 'call' }, 1400);
+        break;
       case 'match-end':
         break;
     }
@@ -277,6 +313,10 @@ export class GameSession {
       high: a.high,
       lockOn: this.camRig.lockOn,
       stance: p.stance,
+      mode: this.competitive ? 'competitive' : 'arcade',
+      points: [w.points[0], w.points[1]],
+      gamjeom: this.competitive ? [this.competitive.stats[0].gamjeom, this.competitive.stats[1].gamjeom] : [0, 0],
+      lead: a.lead,
     });
   }
 

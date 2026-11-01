@@ -67,3 +67,35 @@ A web manifest and Apple standalone tags let players launch fullscreen from the 
 ## D-014 — UI-aware camera framing
 
 The camera fits both fighters into the screen region not covered by the HUD and controls (field-of-view math) and shifts the projection with `setViewOffset`, instead of using a fixed distance formula.
+
+## D-015: Competitive rules as optional engine hooks
+
+`Ruleset.hooks` (judge contact, attack start, after tick, round decision, match result, round length), a stoppage phase in `CombatWorld`, and a public `endRound()`. Arcade implements no hooks, so its path is unchanged. Competitive is a stateful class created per session. Validation, scoring, penalties and round logic live in separate modules.
+
+## D-016: Competitive round length 90 s (needs approval)
+
+WT senior rounds are 2:00. The game uses 90 s for pacing on mobile; it's configurable in `WT_2026.roundSeconds`.
+
+## D-017: Unverifiable rule details are configurable and flagged
+
+The official 2026 PDF could not be read from the build environment. The values are taken from search excerpts and federation summaries. The gam-jeom limit (5 per round) and the tie-break order are flagged for verification rather than guessed silently.
+
+## D-018: Superiority decision replaced by objective proxies
+
+A referee's superiority judgement can't be simulated fairly. After points, turning points, technical value and gam-jeom, ties go to more techniques delivered, then who scored first, otherwise a drawn round (with a golden round if the match is level).
+
+## D-019: Force threshold from extension, not a fake sensor
+
+Validity uses how far the strike had extended at contact, which the simulation measures via the latched impact point, plus a stamina-starved force factor. There is no random "electronic protector" simulation.
+
+## D-020: Hurt-volume and head-strike corrections (shared engine)
+
+The trunk-protector capsule's cap reached the chin, so head kicks registered as body hits, and head-height strikes swept diagonally through the trunk. Both are fixed for both modes; every Arcade test still passes.
+
+## D-021: AI difficulty from decision quality only
+
+Perception delay, read accuracy, anticipation from the observed rhythm, punish and stop-kick tendencies, softmax noise, boundary and score awareness, habit detection. No damage multipliers and no input reading. Tests enforce a minimum reaction time and that difficulty rises from white to black belt.
+
+## D-022: Lead-leg kicks on the wheel's inner ring
+
+Fast techniques use the shortest thumb travel. There are no new permanent buttons. Classic gets one Rear/Lead chip. Desktop uses an F modifier; gamepad uses the D-pad.

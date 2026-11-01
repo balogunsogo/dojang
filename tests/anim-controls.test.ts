@@ -90,7 +90,7 @@ describe('technique keyframes', () => {
       for (const outcome of ['hit', 'blocked', 'whiff'] as const) {
         for (const seed of [1, 7, 99]) {
           const p = sampleKeys(attackKeys(atk, outcome, seed), tImpact);
-          const limb = atk.move.limb === 'rearFoot' ? 'rLeg' : 'rArm';
+          const limb = atk.move.limb === 'rearFoot' ? 'rLeg' : atk.move.limb === 'leadFoot' ? 'lLeg' : 'rArm';
           expect(p[limb].p[0], `${id} ${outcome} ${seed}`).toBeCloseTo(ref[limb].p[0], 6);
           expect(p[limb].p[1], `${id} ${outcome} ${seed}`).toBeCloseTo(ref[limb].p[1], 6);
           expect(p[limb].p[2], `${id} ${outcome} ${seed}`).toBeCloseTo(ref[limb].p[2], 6);
@@ -137,19 +137,25 @@ describe('technique keyframes', () => {
 });
 
 describe('technique wheel', () => {
-  it('maps drag directions to techniques', () => {
-    expect(pickWheel(0, -60)?.kind).toBe('front'); // up
-    expect(pickWheel(-45, -45)?.kind).toBe('round'); // up-left
-    expect(pickWheel(-60, -20)?.kind).toBe('side'); // left
-    expect(pickWheel(-60, 15)?.kind).toBe('back'); // left, slightly down
+  it('outer ring maps drag directions to rear-leg techniques', () => {
+    expect(pickWheel(0, -110)?.kind).toBe('front'); // up
+    expect(pickWheel(-80, -80)?.kind).toBe('round'); // up-left
+    expect(pickWheel(-110, -36)?.kind).toBe('side'); // left
+    expect(pickWheel(-110, 25)?.kind).toBe('back'); // left, slightly down
+  });
+  it('inner ring maps to lead-leg techniques', () => {
+    expect(pickWheel(0, -60)?.kind).toBe('leadFront');
+    expect(pickWheel(-42, -42)?.kind).toBe('leadRound');
+    expect(pickWheel(-60, 4)?.kind).toBe('leadSide');
+    expect(pickWheel(-42, -42)?.head).toBe(false);
   });
   it('ignores tiny drags and directions with no technique', () => {
     expect(pickWheel(5, -5)).toBeNull();
-    expect(pickWheel(60, 0)).toBeNull(); // right: off the wheel
-    expect(pickWheel(0, 60)).toBeNull(); // down: off the wheel
+    expect(pickWheel(110, 0)).toBeNull(); // right: off the wheel
+    expect(pickWheel(0, 110)).toBeNull(); // down: off the wheel
   });
-  it('the outer ring selects head height', () => {
-    expect(pickWheel(0, -60)?.head).toBe(false);
-    expect(pickWheel(0, -(WHEEL_HEAD_RADIUS + 5))?.head).toBe(true);
+  it('past the outer ring selects head height', () => {
+    expect(pickWheel(0, -110)?.head).toBe(false);
+    expect(pickWheel(0, -(WHEEL_HEAD_RADIUS + 5))).toEqual({ kind: 'front', head: true });
   });
 });

@@ -14,7 +14,21 @@ export class Effects {
   private blobGeo = new THREE.CircleGeometry(0.42, 20);
   private blobMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.32, depthWrite: false });
 
-  constructor(blobShadows: boolean) {
+  /** Competition-area boundary line (Competitive only: one extra draw call). */
+  private boundary: THREE.LineLoop | null = null;
+  private boundaryMat: THREE.LineBasicMaterial | null = null;
+  private boundaryFlash = 0;
+  private readonly lineIdle = new THREE.Color('#f2ede2');
+  private readonly lineAlert = new THREE.Color('#ff3b2f');
+
+  constructor(blobShadows: boolean, boundary?: number) {
+    if (boundary !== undefined) {
+      const b = boundary;
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-b, 0.04, -b), new THREE.Vector3(b, 0.04, -b), new THREE.Vector3(b, 0.04, b), new THREE.Vector3(-b, 0.04, b)]);
+      this.boundaryMat = new THREE.LineBasicMaterial({ color: this.lineIdle, transparent: true, opacity: 0.75 });
+      this.boundary = new THREE.LineLoop(g, this.boundaryMat);
+      this.group.add(this.boundary);
+    }
     for (let i = 0; i < 6; i++) {
       const mesh = new THREE.Mesh(this.flashGeo, this.flashMatHit.clone());
       mesh.visible = false;
@@ -43,7 +57,18 @@ export class Effects {
     mat.color.copy((kind === 'block' ? this.flashMatBlock : this.flashMatHit).color);
   }
 
+  /** Out-of-bounds feedback: the boundary line flashes red briefly. */
+  flashBoundary() {
+    this.boundaryFlash = 1.2;
+  }
+
   update(dt: number, camera: THREE.Camera, fighters: { x: number; z: number }[]) {
+    if (this.boundaryMat) {
+      if (this.boundaryFlash > 0) this.boundaryFlash = Math.max(0, this.boundaryFlash - dt);
+      const k = this.boundaryFlash > 0 ? 0.5 + 0.5 * Math.sin(this.boundaryFlash * 18) : 0;
+      this.boundaryMat.color.copy(this.lineIdle).lerp(this.lineAlert, this.boundaryFlash > 0 ? Math.max(k, 0.4) : 0);
+      this.boundaryMat.opacity = this.boundaryFlash > 0 ? 1 : 0.75;
+    }
     for (const f of this.flashes) {
       if (f.life <= 0) continue;
       f.life -= dt;
@@ -60,6 +85,8 @@ export class Effects {
   }
 
   dispose() {
+    this.boundary?.geometry.dispose();
+    this.boundaryMat?.dispose();
     this.flashGeo.dispose();
     this.blobGeo.dispose();
     this.blobMat.dispose();

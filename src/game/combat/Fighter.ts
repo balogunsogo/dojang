@@ -12,7 +12,9 @@ export type FighterStateName =
   | 'hitstun'
   | 'switch'
   | 'ko'
-  | 'victory';
+  | 'victory'
+  /** On the floor after a fall or knockdown (Competitive rules only). */
+  | 'down';
 export type Stance = 'orthodox' | 'southpaw';
 export type AttackPhase = 'startup' | 'active' | 'recovery';
 
@@ -84,6 +86,14 @@ export class Fighter {
   stunTicks = 0;
   /** Was this fighter hit during attack startup (counter hit)? */
   counterHit = false;
+  /**
+   * How far from the mat centre the fighter may move (m). Arcade keeps
+   * fighters on the mat; Competitive raises it so the boundary line can
+   * actually be crossed (and penalized).
+   */
+  boundsLimit = ARENA_HALF - 0.3;
+  /** Why the fighter is down: own fall (penalized) or opponent's technique. */
+  downCause: 'fall' | 'knockdown' | null = null;
   /** Locomotion phase for footwork animation (radians). */
   stepPhase = 0;
   private dashX = 0;
@@ -228,6 +238,10 @@ export class Fighter {
         if (this.stateTick >= SWITCH_TICKS) this.setState('idle');
         break;
       }
+      case 'down':
+        turnRate = 0;
+        if (this.stateTick >= this.stunTicks) this.setState('idle');
+        break;
       case 'ko':
       case 'victory':
         turnRate = 0;
@@ -243,7 +257,7 @@ export class Fighter {
       const k = Math.min(1, ACCEL * DT);
       this.vx += (desiredVX - this.vx) * k;
       this.vz += (desiredVZ - this.vz) * k;
-    } else if (this.state === 'hitstun' || this.state === 'blockstun' || this.state === 'ko' || this.state === 'victory') {
+    } else if (this.state === 'hitstun' || this.state === 'blockstun' || this.state === 'ko' || this.state === 'victory' || this.state === 'down') {
       const f = Math.exp(-7 * DT);
       this.vx *= f;
       this.vz *= f;
@@ -254,7 +268,7 @@ export class Fighter {
 
     this.x += this.vx * DT;
     this.z += this.vz * DT;
-    const lim = ARENA_HALF - 0.3;
+    const lim = this.boundsLimit;
     this.x = clamp(this.x, -lim, lim);
     this.z = clamp(this.z, -lim, lim);
 
@@ -345,8 +359,11 @@ export class Fighter {
   /** World-space strike point at a given progress (0..1) through the active window. */
   strikePoint(progress: number): V3 {
     const a = this.attack!;
-    const c = a.move.chamber;
+    let c = a.move.chamber;
     const i = a.impact;
+    // A head-height kick is chambered high and extends near-horizontally to the
+    // head; it must not sweep diagonally up through the trunk zone.
+    if (a.height === 'head' && a.move.limb !== 'rearHand') c = [c[0], Math.max(c[1], i[1] - 0.12), c[2]];
     const t = smoothstep(clamp(progress, 0, 1));
     const m = this.mirror;
     const local: V3 = [(c[0] + (i[0] - c[0]) * t) * m, c[1] + (i[1] - c[1]) * t, c[2] + (i[2] - c[2]) * t];
@@ -369,6 +386,9 @@ export class Fighter {
       case 'dash':
         rate = 4;
         break;
+      case 'down':
+        rate = 8;
+        break;
       default:
         rate = 0;
     }
@@ -377,6 +397,15 @@ export class Fighter {
   }
 
   /** Apply a successful (unblocked) hit. */
+  /** Put the fighter on the floor for `ticks` (falls and knockdowns). */
+  knockDown(ticks: number, cause: 'fall' | 'knockdown') {
+    this.buffered = null;
+    this.hitReaction = null;
+    this.stunTicks = ticks;
+    this.downCause = cause;
+    this.setState('down');
+  }
+
   receiveHit(stun: number, pushX: number, pushZ: number, reaction: HitReaction) {
     this.counterHit = this.state === 'attack' && this.attackPhase === 'startup';
     this.hitReaction = reaction;

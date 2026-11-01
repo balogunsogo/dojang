@@ -52,6 +52,10 @@ Open the perf overlay with `` ` ``, Settings › Performance overlay, or `?perf=
 
 See PHASE_1_5.md § D. In the same environment: draw calls 20–23 → 19–21, animation CPU 0.32–0.43 → 0.37–0.48 ms per frame for both fighters, no new textures, shaders or materials. Phone UI coverage went from 25–32% to 14–18% of the screen.
 
+## Phase 2 vs Phase 1.5
+
+See PHASE_2.md §G. Arcade UI coverage is unchanged (13.6–17.6%). Competitive matches it (13.6–17.6%) with a 28 px scoreboard. Draw calls are 19–23 (+1 boundary line in Competitive). Simulation CPU, now including the new AI, is 0.07–0.13 ms per frame, against a 1 ms budget. No new textures, shaders or physics.
+
 ## Not yet verified
 
 - **No real-device testing has been done.** Nothing has run on a physical iPhone, an Android phone or a desktop GPU. The 60/30 FPS targets are unverified.

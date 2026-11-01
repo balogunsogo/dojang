@@ -17,7 +17,8 @@ export function App() {
     const params = new URLSearchParams(location.search);
     if (params.get('perf') === '1') useGameStore.getState().updateSettings({ showPerf: true });
     const auto = params.get('start');
-    if (auto === 'easy' || auto === 'normal' || auto === 'hard') useGameStore.getState().startMatch(auto);
+    const mode = params.get('mode') === 'competitive' ? 'competitive' : 'arcade';
+    if (auto === 'easy' || auto === 'normal' || auto === 'hard') useGameStore.getState().startMatch(auto, mode);
     // Block iOS pinch-zoom gestures inside the game.
     const block = (e: Event) => e.preventDefault();
     document.addEventListener('gesturestart', block);
