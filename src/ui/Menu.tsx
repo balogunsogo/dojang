@@ -53,6 +53,18 @@ export function Menu() {
                 ))}
               </div>
             </section>
+            {mode === 'competitive' && (
+              <section className="row">
+                <label className="inline">
+                  Round length
+                  <select value={settings.compRoundSeconds} onChange={(e) => update({ compRoundSeconds: Number(e.target.value) as 60 | 90 | 120 })} data-testid="round-length">
+                    <option value={60}>60 s</option>
+                    <option value={90}>90 s (default)</option>
+                    <option value={120}>120 s (WT senior standard)</option>
+                  </select>
+                </label>
+              </section>
+            )}
             <section>
               <h3>Opponent</h3>
               <div className="diffs">

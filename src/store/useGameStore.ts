@@ -23,6 +23,8 @@ export interface HudState {
   mode: 'arcade' | 'competitive';
   points: [number, number];
   gamjeom: [number, number];
+  /** Gam-jeom across the whole match (Art. 14 cumulative limit). */
+  gamjeomMatch: [number, number];
   lead: boolean;
 }
 
@@ -46,12 +48,14 @@ export interface Settings {
   selectedKick: 'front' | 'round' | 'side' | 'back' | 'leadFront' | 'leadRound' | 'leadSide';
   /** Dismissed the "add to home screen" hint. */
   pwaHintDismissed: boolean;
+  /** Competitive round length (s): 60, 90 (default) or 120 (WT senior standard). */
+  compRoundSeconds: 60 | 90 | 120;
 }
 
 const SETTINGS_KEY = 'dojang.settings.v1';
 
 function loadSettings(): Settings {
-  const def: Settings = { quality: 'auto', showPerf: false, volume: 0.8, forceTouch: false, controlScheme: 'compact', selectedKick: 'round', pwaHintDismissed: false };
+  const def: Settings = { quality: 'auto', showPerf: false, volume: 0.8, forceTouch: false, controlScheme: 'compact', selectedKick: 'round', pwaHintDismissed: false, compRoundSeconds: 90 };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };

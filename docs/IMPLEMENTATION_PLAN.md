@@ -49,13 +49,14 @@ Requested after desktop and physical-iPhone UAT. Details and measurements are in
 
 Details are in PHASE_2.md.
 
-- ✅ WT 2026-inspired Competitive ruleset: scoring, validation, turning eligibility, gam-jeom subset, boundary, Kal-yeo and Kye-sok, knockdowns, point gap, tie-breaks, best of three, golden round
+- ✅ WT 2026-inspired Competitive ruleset: scoring, validation, turning eligibility, gam-jeom subset, boundary, Kal-yeo and Kye-sok, knockdowns, point gap, Art. 15.5 tie-breaks, gam-jeom round and match limits, best of three (no golden round, Art. 7.1.2), 60/90/120 s rounds
 - ✅ Lead-leg front, roundhouse and side (cut) kicks with distinct frame data and animation; back kick to the head
 - ✅ Layered AI: perception delay, opponent model, reactive / punish / tactical layers; three profiles distinguished by decision quality
 - ✅ Menu mode selection, Competitive HUD (points, gam-jeom), score and penalty feedback, results with per-round points and technique counts
 - ✅ Controls: F modifier, D-pad, Compact wheel inner ring, Classic Lead chip
-- ✅ Tests: 87 unit and scenario tests; e2e full Competitive match
-- ⬜ Verify the unconfirmed WT values (PHASE_2.md §A) against the official text
+- ✅ Tests: 96 unit and scenario tests; e2e full Competitive match
+- ✅ Rules corrections from the Phase 2 review (Art. 7.1.2, 14, 15.5; round lengths)
+- ⬜ Open interpretation items (HANDOFF.md)
 - ⬜ Real-device UAT
 
 ## Phase 3: Complete mobile interaction ⬜

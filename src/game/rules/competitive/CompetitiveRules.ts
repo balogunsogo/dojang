@@ -22,7 +22,6 @@ const PASSIVE: PenaltyReason[] = ['boundary', 'fall'];
 
 export interface RoundRecord {
   round: number;
-  golden: boolean;
   stats: [FighterRoundStats, FighterRoundStats];
   winner: 0 | 1 | null;
   reason: string;
@@ -38,7 +37,7 @@ export interface RoundRecord {
  *    enough delivered force?
  *  - scoring.ts:    how many points is it worth?
  *  - this class:    penalties (gam-jeom), stoppages, round/match flow
- *  - rounds.ts:     round decisions, tie-breaks, best-of-three / golden round
+ *  - rounds.ts:     round decisions (Art. 15.5 tie-breaks), best of three
  */
 export class CompetitiveRules implements Ruleset, RuleHooks {
   readonly id = 'competitive' as const;
@@ -48,13 +47,16 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
   readonly hooks: RuleHooks = this;
   stats: [FighterRoundStats, FighterRoundStats] = [emptyStats(), emptyStats()];
   history: RoundRecord[] = [];
-  golden = false;
+  /** Gam-jeom received across the whole match (Art. 14 cumulative limit). */
+  matchGamjeom: [number, number] = [0, 0];
+  /** Fighter who reached the cumulative gam-jeom limit (loses the match). */
+  private matchLostBy: 0 | 1 | null = null;
   /** Fighters currently flagged out of bounds (penalized once per exit). */
   private out: [boolean, boolean] = [false, false];
   private seenEvents = 0;
 
-  constructor(cfg: CompetitiveConfig = WT_2026) {
-    this.cfg = cfg;
+  constructor(cfg: Partial<CompetitiveConfig> = {}) {
+    this.cfg = { ...WT_2026, ...cfg };
   }
 
   get roundSeconds() {
@@ -79,7 +81,8 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
 
   onMatchStart() {
     this.history = [];
-    this.golden = false;
+    this.matchGamjeom = [0, 0];
+    this.matchLostBy = null;
   }
 
   onRoundStart(world: CombatWorld) {
@@ -88,13 +91,16 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     this.seenEvents = world.events.length;
   }
 
-  roundLength(world: CombatWorld) {
-    return world.round > this.cfg.roundsToWin * 2 - 1 ? this.cfg.goldenRoundSeconds : this.cfg.roundSeconds;
+  roundLength() {
+    return this.cfg.roundSeconds;
   }
 
   onAttackStart(world: CombatWorld, f: Fighter) {
     // Techniques launched after the referee's Kal-yeo (beyond a short grace
     // for attacks already on their way) are prohibited.
+    const st = this.stats[f.id];
+    st.attempts++;
+    if (!Number.isFinite(st.firstAttackTick)) st.firstAttackTick = world.tick;
     if (world.phase !== 'break') return;
     if (world.tick - world.stoppageTick <= this.cfg.kalyeoGraceTicks) return;
     const opp = world.fighters[1 - f.id];
@@ -103,7 +109,9 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
 
   judgeContact(world: CombatWorld, c: ContactInfo): ContactVerdict {
     const st = this.stats[c.attacker.id];
-    st.contacts++;
+    st.delivered++;
+    // Contacts after Kal-yeo are void and not registered.
+    if (world.phase !== 'break') st.registeredHits++;
     const check = validateContact(c.attacker, c.attack, c.zone, world.phase === 'break', this.cfg);
     const kind = scoreKind(c.attack.move, c.zone, check.turning);
     if (!check.valid) {
@@ -114,7 +122,9 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     st.points += pts;
     st.scored[kind]++;
     if (check.turning) st.turningPoints += pts;
-    if (!Number.isFinite(st.firstScoreTick)) st.firstScoreTick = world.tick;
+    if (kind === 'punchTrunk') st.punchPoints += pts;
+    else if (c.zone === 'head') st.headPoints += pts;
+    else st.trunkPoints += pts;
     return { points: pts, valid: true, label: SCORE_LABEL[kind], turning: check.turning };
   }
 
@@ -140,7 +150,7 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     if (ev.length < this.seenEvents) this.seenEvents = 0;
     for (let i = this.seenEvents; i < ev.length; i++) {
       const e = ev[i];
-      if (e.type === 'block') this.stats[e.attacker].contacts++;
+      if (e.type === 'block') this.stats[e.attacker].delivered++;
     }
     this.seenEvents = ev.length;
 
@@ -167,11 +177,6 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     const [a, b] = this.stats;
     world.points[0] = a.points;
     world.points[1] = b.points;
-    // Golden round: the first point (including from a gam-jeom) wins.
-    if (this.golden && a.points !== b.points) {
-      world.endRound(a.points > b.points ? 0 : 1, 'golden', 'Golden round: first point');
-      return;
-    }
     // Point gap ends the round.
     if (this.cfg.pointGap > 0 && Math.abs(a.points - b.points) >= this.cfg.pointGap) {
       world.endRound(a.points > b.points ? 0 : 1, 'gap', `Point gap (${this.cfg.pointGap})`);
@@ -187,12 +192,19 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     const pts = PASSIVE.includes(reason) && late ? this.cfg.passiveLateGamjeomPoints : this.cfg.gamjeomPoints;
     st.gamjeom++;
     st.gamjeomReasons.push(PENALTY_LABEL[reason]);
+    this.matchGamjeom[f.id]++;
     const os = this.stats[opp];
     os.points += pts;
-    if (!Number.isFinite(os.firstScoreTick)) os.firstScoreTick = world.tick;
+    os.gamjeomPoints += pts;
     world.points[0] = this.stats[0].points;
     world.points[1] = this.stats[1].points;
     world.events.push({ type: 'penalty', fighter: f.id, reason, label: PENALTY_LABEL[reason], pointsToOpponent: pts, count: st.gamjeom });
+    if (this.cfg.gamjeomMatchLimit > 0 && this.matchGamjeom[f.id] >= this.cfg.gamjeomMatchLimit) {
+      // Art. 14: the cumulative limit loses the match outright.
+      this.matchLostBy = f.id;
+      world.endRound(opp as 0 | 1, 'penalties', `${this.cfg.gamjeomMatchLimit} gam-jeom in the match`);
+      return;
+    }
     if (this.cfg.gamjeomRoundLimit > 0 && st.gamjeom >= this.cfg.gamjeomRoundLimit) {
       world.endRound(opp as 0 | 1, 'penalties', `${this.cfg.gamjeomRoundLimit} gam-jeom`);
       return;
@@ -209,14 +221,12 @@ export class CompetitiveRules implements Ruleset, RuleHooks {
     for (let i = world.events.length - 1; i >= 0 && !last; i--) if (world.events[i].type === 'round-end') last = world.events[i];
     this.history.push({
       round: world.round,
-      golden: this.golden,
       stats: [structuredClone(this.stats[0]), structuredClone(this.stats[1])],
       winner: world.lastRoundWinner,
       reason: last && last.type === 'round-end' ? last.reason : 'time',
       detail: last && last.type === 'round-end' ? last.detail : undefined,
     });
-    const r = matchResult(world.round, world.roundWins, this.cfg.roundsToWin);
-    this.golden = r.golden;
-    return { over: r.over, winner: r.winner };
+    if (this.matchLostBy !== null) return { over: true, winner: (1 - this.matchLostBy) as 0 | 1 };
+    return matchResult(world.round, world.roundWins, this.cfg.roundsToWin);
   }
 }

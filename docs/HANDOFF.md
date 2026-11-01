@@ -1,71 +1,66 @@
 # Handoff
 
-_Last updated: end of the Phase 2 session (2026-11-01)._
+_Last updated: Phase 2 rules corrections after the review of PR #3 (2026-11-01)._
 
 ## Branches and pull requests
 
-- `main`: Phases 0, 1 and 1.5. PR balogunsogo/dojang#1 (Phases 0–1) and balogunsogo/dojang#2 (Phase 1.5) are merged. Deployed at https://dojang-sigma.vercel.app.
-- `claude/amazing-galileo-4k6k1j`: **Phase 2**, restarted from `main` after #2 merged, with a pull request open against `main`. Run `git log --oneline origin/main..` for the commits.
+- `main`: Phases 0, 1, 1.5 and 2. PRs balogunsogo/dojang#1, balogunsogo/dojang#2 and balogunsogo/dojang#3 are merged. Production: https://dojang-sigma.vercel.app.
+- `claude/amazing-galileo-4k6k1j`: the **Phase 2 rules corrections** requested in the review of #3. PR #3 had already been merged before the corrections, so the branch was restarted from `main` and the corrections are in a new pull request against `main`. Run `git log --oneline origin/main..` for the commits.
 
-## What was implemented
+## What changed in the rules corrections
 
-**Phases 0–1.5** are unchanged; see IMPLEMENTATION_PLAN.md, PHASE_1_5.md and earlier history.
+- **Round length:** selectable 60 / 90 / 120 s in the menu when Competitive is chosen. 90 s is the default; 120 s is labelled the WT senior standard. The setting is saved.
+- **Gam-jeom (Art. 14):**
+  - 5 in one round lose that round.
+  - 10 cumulative in the match lose the match.
+  - The HUD shows the round count (`GJn`), plus `/m` with the match total once it differs.
+  - Results list the match total with reasons.
+- **Tie-breaks (Art. 15.5)** for tied rounds:
+  - a. turning-kick points
+  - b. head, then trunk, then punch, then gam-jeom points
+  - c. registered valid hits
+  - d. a deterministic **game decision** (delivered techniques, thrown techniques, fewer gam-jeom, first attack, Hong as the fixed last resort), labelled "Game decision", never "referee"
 
-**Phase 2** (full report: PHASE_2.md):
-
-- **Competitive Sparring**, based on the WT 2026 rules (`src/game/rules/competitive/`):
-  - Scoring: 1 / 2 / 3 / 4 / 6.
-  - Validation: clean contact, legal target, extension-based force, turning eligibility.
-  - Gam-jeom subset: boundary, fall, below the waist, after Kal-yeo, fallen opponent, head punch. Includes the late ×2 and the limit of 5.
-  - Flow: Kal-yeo and Kye-sok with the clock stopped, knockdowns, 15-point gap, tie-break chain, best of three, golden round, per-round history.
-  - Engine integration: optional `Ruleset.hooks` and a `break` phase in `CombatWorld`; Arcade has no hooks.
-- **Lead-leg kicks** (front, roundhouse, side/cut kick) with their own frame data and distinct IK animation, plus the back kick to the head.
-- **AI** rebuilt as a layered decision system with three profiles distinguished by perception and decision quality (`src/game/ai/AIController.ts`).
-- **UI:**
-  - Menu mode choice (Arcade or Competitive).
-  - Competitive HUD: points beside the clock, GJ markers, still 28 px on phones.
-  - Score and penalty toasts with sounds.
-  - Results screen: per-round points, decisions, techniques scored, penalties.
-  - Boundary line that flashes red when a fighter crosses it.
-- **Controls:**
-  - Keyboard: F + K/L/U.
-  - Gamepad: D-pad.
-  - Compact: the wheel's inner ring holds the lead kicks.
-  - Classic: a Rear/Lead chip.
-- **Shared-engine fixes:** trunk-protector hurt volume and the head-kick strike path (head kicks were registering as body hits).
+  Rounds are never drawn.
+- **No golden round (Art. 7.1.2):** best of three ends when a fighter wins two rounds.
+- **Unchanged:** Arcade, AI, lead-leg techniques, animation and mobile UX.
 
 ## What was tested
 
-- `npm test`: **87/87 pass** (36 existing plus 51 new). Covers competitive rules (38), AI scenarios (12), and the wheel and lead-leg animation invariants.
-- `node scripts/e2e.mjs` against the production preview covers:
-  - every Phase 1.5 desktop, Arcade, mobile, PWA and portrait check
-  - Compact inner-ring lead kicks and Classic Lead chip
-  - a full Competitive match started from the menu
-  - Competitive HUD on a phone
+- `npm test`: **96/96 pass**.
+  - Competitive tests rose from 38 to 47. New coverage:
+    - 60/90/120 s rounds: clock, exact timeout and next round
+    - default 90 s and senior 120 s
+    - 5 gam-jeom round loss
+    - 10 cumulative match loss, reached across three rounds
+    - passive late ×2 against active ×1
+    - each 15.5 step a–c in priority order
+    - the labelled game fallback (never a draw)
+    - best of three with no golden round
+    - a three-round match decided only by tie-breaks
+    - 2-0 in two rounds
+    - rematch reset
+  - All existing scoring, penalty, Arcade, AI and animation tests pass.
+- `E2E_ONLY=competitive,competitive-mobile,exchange node scripts/e2e.mjs` against the production preview: **18/18 pass**.
+  - The 120 s choice from the menu drives the clock.
+  - Body +2, head +3, turning head +6, lead roundhouse +2, boundary gam-jeom.
+  - A 2-0 win in exactly two rounds; results; rematch; back to menu.
+  - Phone HUD at 28 px.
+  - An Arcade full match and rematch.
+- **Not run in this pass:** the full 54-check e2e suite. Desktop controls, Compact and Classic touch, PWA and portrait were unaffected; the full suite passed on the merged Phase 2 code. Nothing ran on real devices.
 
-  **54/54 pass.**
-- `scripts/ux-capture.mjs` on 4 phone profiles: Arcade and Competitive both cover 13.6–17.6% of the screen (identical to Phase 1.5), with a 28 px scoreboard and both fighters fully visible.
-- **Not tested:** real devices, WebKit/Safari, a real gamepad, the official WT PDF text.
+## Open rules interpretation issues
 
-## What remains incomplete
-
-- Verify the WT values that are still unconfirmed against the official June 2026 text: tie-break order, gam-jeom limit, passive late window. The round length (90 s vs. 2:00) needs a product decision.
-- Real-device UAT: wheel rings, Competitive HUD readability, AI feel.
-- Knockdown has no 8-count. Prohibited acts with no game mechanic are not simulated (PHASE_2.md §B).
-- Unused CC0 clips are still shipped (about 40 KB).
-
-## Current blockers and risks
-
-1. The official WT document is unreachable from this environment: worldtaekwondo.org, taekwondo-canada.com and assets.contentstack.io are blocked by the network policy. They need to be allowed, or someone must check the values by hand.
-2. Animation feel, touch ergonomics and performance still need physical devices.
-3. No project license chosen (`UNLICENSED`).
+The build environment still cannot open the rulebook PDF (taekwondo.dk is blocked by the network policy), so these items could not be checked against the text:
+1. **Last-10-seconds passivity (Art. 14):** currently a passive gam-jeom (crossing the boundary, falling) in the last 10 s of a round gives the opponent 2 points instead of 1; active infractions always give 1. Please confirm which acts count as passive, the window length, and the point award. All are configurable in `WT_2026`.
+2. **"Registered valid hits" (15.5 c):** interpreted as every clean contact on the trunk protector or headgear, including contacts below the scoring force threshold, but excluding blocked strikes and contacts during Kal-yeo. If the rule means only scoring hits, it is a one-line change in `CompetitiveRules.judgeContact`.
+3. **Overlap between 15.5 a and b:** turning head kicks count in a. (turning points) and again in b. (head points). The same for turning body kicks in trunk points. Confirm whether b. should exclude turning kicks.
+4. **Game fallback order (15.5 d):** the order of the deterministic proxies, and Hong as the fixed last resort, are the game's own choices. Review if a different neutral rule is preferred.
 
 ## Exact next steps
 
-1. Product owner: approve or adjust the round length (`WT_2026.roundSeconds`) and the gam-jeom limit (`WT_2026.gamjeomRoundLimit`).
-2. Check the tie-break order (Article 15) and the penalty articles against the official PDF; edit `config.ts` and `rounds.ts` if needed. The tests document the expected behaviour.
-3. Run UAT with the steps in the Phase 2 PR. Tune `HOLD_MS`, `WHEEL_LEAD_EDGE`, `WHEEL_HEAD_RADIUS` and the AI profile numbers from feedback.
-4. After merge: Phase 3 (complete mobile interaction), as in IMPLEMENTATION_PLAN.md. Not started.
+1. UAT on the PR's Vercel preview (steps are in the PR description). Answer the four items above.
+2. After merge, Phase 3 (complete mobile interaction), as in IMPLEMENTATION_PLAN.md. Not started.
 
 ## How to run the checks
 
@@ -87,8 +82,4 @@ In a second terminal, with the preview server running:
 node scripts/e2e.mjs http://localhost:4173/ --shots /tmp/shots
 ```
 
-```bash
-node scripts/ux-capture.mjs http://localhost:4173/ /tmp/ux comp "&mode=competitive"
-```
-
-The browser scripts use Playwright 1.63.0; in a fresh environment, run `npx playwright install chromium` once.
+Prefix the e2e command with `E2E_ONLY=competitive,exchange` (or other section names) to run a subset. The browser scripts use Playwright 1.63.0; in a fresh environment, run `npx playwright install chromium` once.

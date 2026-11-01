@@ -34,6 +34,8 @@ export interface SessionOptions {
   difficulty: Difficulty;
   aiEnabled: boolean;
   mode: MatchMode;
+  /** Competitive round length (s). */
+  roundSeconds?: 60 | 90 | 120;
   callbacks: SessionCallbacks;
 }
 
@@ -77,7 +79,7 @@ export class GameSession {
 
   constructor(o: SessionOptions) {
     this.o = o;
-    const rules: Ruleset = o.mode === 'competitive' ? new CompetitiveRules() : ArcadeRules;
+    const rules: Ruleset = o.mode === 'competitive' ? new CompetitiveRules(o.roundSeconds ? { roundSeconds: o.roundSeconds } : {}) : ArcadeRules;
     this.world = new CombatWorld(rules, [this.defs[0].stats, this.defs[1].stats]);
     this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
     this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
@@ -316,6 +318,7 @@ export class GameSession {
       mode: this.competitive ? 'competitive' : 'arcade',
       points: [w.points[0], w.points[1]],
       gamjeom: this.competitive ? [this.competitive.stats[0].gamjeom, this.competitive.stats[1].gamjeom] : [0, 0],
+      gamjeomMatch: this.competitive ? [this.competitive.matchGamjeom[0], this.competitive.matchGamjeom[1]] : [0, 0],
       lead: a.lead,
     });
   }

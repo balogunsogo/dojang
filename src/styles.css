@@ -81,6 +81,8 @@ kbd { background: #3a2f24; border: 1px solid #6a543c; border-radius: 4px; paddin
 .pts { flex: none; min-width: 34px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; border-radius: 6px; color: #fff; text-shadow: 0 1px 2px #000; }
 .pts.chung { background: rgba(31, 79, 184, 0.75); }
 .pts.hong { background: rgba(196, 43, 43, 0.75); }
+.gj small { font-size: 8px; opacity: 0.75; }
+label.inline { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .gj { font-size: 9px; font-weight: 700; color: #16130f; background: #f4b13c; border-radius: 3px; padding: 0 3px; line-height: 12px; }
 .hud.comp .side .bar.st { margin-top: 3px; height: 3px; }
 .toasts { position: absolute; left: 0; right: 0; top: 20%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
