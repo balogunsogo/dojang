@@ -1,0 +1,7 @@
+node_modules
+dist
+.asset-cache
+*.log
+test-results
+artifacts/screens/tmp
+tsconfig.tsbuildinfo
