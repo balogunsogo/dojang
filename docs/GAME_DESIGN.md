@@ -1,0 +1,106 @@
+# Game Design
+
+## Pillars
+
+1. **Believable Taekwondo.** Techniques read as Taekwondo: chamber, extension, rechamber; a bladed sparring stance; constant bouncing footwork; kicks dominate, punches are short and to the body.
+2. **Responsive, readable combat.** Every technique has frame data. You win with timing, distance and stamina, not button mashing.
+3. **Mobile-first.** Touch is a first-class input and phones are a first-class target.
+
+## Confirmed product decisions
+
+These are fixed: semi-realistic 3D; a modern Korean dojang with traditional details; a free third-person camera with optional lock-on and framing assist; arcade/simulation hybrid combat; competitive point rules and arcade health rules; Training and AI Sparring modes; two selectable fighters; basic belt milestones; virtual buttons and touch gestures; desktop, Android Chrome and iOS Safari; single-player, no backend.
+
+## Fighters
+
+| | Kim Jae-won (김재원) | Park Ha-na (박하나) |
+|---|---|---|
+| Build | 1.83 m, scale 1.00 | 1.74 m, scale 0.95 |
+| Power | ×1.08 | ×0.94 |
+| Footwork speed | ×1.00 | ×1.10 |
+| Stamina recovery | ×1.00 | ×1.12 |
+
+In Phase 1 the player is Jae-won (chung / blue corner) and the AI is Ha-na (hong / red corner). Character selection arrives in Phase 4. Both share one rig and one combat engine.
+
+## Combat model
+
+The simulation runs at a **fixed 60 Hz**. All timings below are in ticks (1 tick ≈ 16.7 ms).
+
+### States
+
+`idle` (stance and footwork) · `guard` · `dash` · `attack` (startup → active → recovery) · `hitstun` · `blockstun` · `switch` (stance change) · `ko` · `victory`
+
+- Attacks can be started from idle or guard, and from a dash after 7 ticks (a dash-in kick).
+- Inputs are **buffered for 10 ticks**, so a technique pressed late in recovery comes out on the first free frame.
+- If a technique lands cleanly, recovery can be **cancelled into the next technique** after `cancelAfter` ticks. This enables combinations; the back kick cannot be cancelled.
+- A hit during the defender's startup is a **counter hit**: ×1.25 damage and 6 extra stun ticks.
+- **Hit stop** freezes the fight for 5 ticks on a hit and 3 on a block, which sells the impact.
+
+### Techniques (orthodox; kicks use the rear leg)
+
+| Technique | Startup | Active | Recovery | Stamina | Damage | Heights | Reach (body impact) |
+|---|---|---|---|---|---|---|---|
+| Straight punch (jireugi) | 6 | 3 | 12 | 5 | 5 | body | 0.80 m |
+| Front kick (ap chagi) | 10 | 4 | 16 | 10 | 9 | body/head | 1.00 m |
+| Roundhouse (dollyeo chagi) | 11 | 4 | 17 | 12 | 11 | body/head | 1.02 m |
+| Side kick (yeop chagi) | 14 | 5 | 21 | 15 | 14 | body/head | 1.20 m |
+| Back kick (dwi chagi) | 17 | 5 | 24 | 18 | 17 | body | 1.12 m |
+
+Head variants add 2 startup ticks, 2 stamina and ×1.35 damage. Back kick is a turning technique and has the most pushback.
+
+### Hit detection
+
+- The defender has two hurt volumes: a trunk-protector capsule (0.98–1.38 m, r 0.20) and a headgear sphere (1.62 m, r 0.15).
+- During active frames the striking surface sweeps from the chamber point to the impact point. Each tick's swept segment is tested against both volumes, so a hit can't tunnel through between ticks.
+- **Distance-aware extension:** on the first active tick, the impact point is clamped to the opponent's surface when they are inside full reach. The kick lands on the target instead of passing through it. Beyond full reach it extends fully and misses.
+- Each technique can hit at most once.
+
+### Guard and stamina
+
+- Guard blocks attacks that come from within 75° of the defender's facing. A block drains `0.8 × move stamina` from the defender. If that empties their stamina, it's a **guard break**: stun plus half damage. Arcade rules apply 12% chip damage through a guard.
+- Stamina (max 100) recovers at 17/s standing, 11/s moving, 6/s guarding, 4/s while dashing or switching, and 0 while attacking or stunned. Recovery runs at 25% for 20 ticks after spending.
+- Low stamina has costs. Below a technique's cost it becomes "tired": 4 ticks slower and ×0.7 damage. Below 4 stamina you can't attack, and below 15 footwork is 20% slower. Dash costs 9.
+
+### Footwork
+
+Fighters always face each other, as in real sparring. Speeds: forward 2.1 m/s, back 1.75, lateral 1.85, guard ×0.45. A dash is a 12-tick burst at 5.4 m/s; with no direction it's a back-step. Fighters push apart at 0.68 m, and the mat is 8 × 8 m.
+
+## Rulesets
+
+Both rulesets plug into the same `CombatWorld` through the `Ruleset` interface (`src/game/rules/rules.ts`).
+
+### Arcade (implemented)
+
+Health 100. Rounds are 60 s, best of 3. A round ends on a KO, or on time, where the higher health percentage wins (equal is a draw). The match ends when a fighter reaches 2 round wins, or after 3 rounds.
+
+### Competitive: WT-inspired points (Phase 2)
+
+Planned scoring, modeled on the World Taekwondo Competition Rules. **The values must be checked against the current published WT Competition Rules & Interpretation before implementation;** the source couldn't be reached from the build environment.
+
+| Valid technique | Points (planned) |
+|---|---|
+| Punch to trunk protector | 1 |
+| Kick to trunk protector | 2 |
+| Turning kick to trunk | 4 |
+| Kick to head | 3 |
+| Turning kick to head | 5 |
+| Opponent's penalty (gam-jeom) | 1 |
+
+Planned simplifications, to be documented in game: no electronic-sensor force thresholds (a "valid" kick is a clean, unblocked hit with the foot at the scoring zone); a limited penalty set (stepping out of the mat, excessive guard/clinching); a best-of-three round system with a point gap or superiority decision; no video replay. The game will not claim tournament fidelity.
+
+## Modes
+
+- **AI Sparring (implemented, Arcade rules).** Three AI presets:
+  - **Easy:** 24-tick reaction, rarely guards.
+  - **Normal:** 14-tick reaction, guards and counters, picks techniques by range.
+  - **Hard:** 8-tick reaction, frequent guard, punishes whiffs, dashes.
+
+  The AI uses the same intents and frame data as the player. The presets are a first pass and get tuned in Phase 2.
+- **Training (Phase 4).** Stationary and moving targets, accuracy challenges, timed drills, combinations, technique feedback and summaries.
+
+## Progression (Phase 4)
+
+Local belt milestones: white → yellow → green. Each belt is unlocked by specific training challenges and saved locally. This is a game progression model, not an official grading. The belt color already renders on the fighter's dobok.
+
+## Presentation
+
+Match calls use Korean referee commands: *Joon-bi* (ready), *Shi-jak* (begin), *Keu-man* (stop). Competition corners are chung (blue) and hong (red), shown on the trunk protector and headgear. The dojang has the taegeukgi, a 跆拳道 calligraphy banner with the five tenets (예의 · 염치 · 인내 · 극기 · 백절불굴), a dancheong frieze, changsal lattice windows, a belt rack, a mirror wall and heavy bags.
