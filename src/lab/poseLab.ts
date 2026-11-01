@@ -23,6 +23,9 @@ export async function runPoseLab(root: HTMLElement) {
     { kind: 'back', height: 'body' },
     { kind: 'punch', height: 'body' },
     { kind: 'round', height: 'head' },
+    { kind: 'leadFront', height: 'body' },
+    { kind: 'leadRound', height: 'body' },
+    { kind: 'leadSide', height: 'body' },
   ].filter((r) => !only || only.split(',').includes(`${r.kind}${r.height === 'head' ? '-head' : ''}`)) as { kind: AttackKind; height: TargetHeight }[];
   const cols = ['stance', 's0.5', 'chamber', 'impact', 'r0.4', 'r0.8'];
   const cellW = Math.floor(W / cols.length);

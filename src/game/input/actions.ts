@@ -2,9 +2,11 @@
 // touch gestures, gamepad) and the AI produce the same structures, so combat
 // code never knows where an input came from.
 
-export type AttackKind = 'punch' | 'front' | 'round' | 'side' | 'back';
+export type AttackKind = 'punch' | 'front' | 'round' | 'side' | 'back' | 'leadFront' | 'leadRound' | 'leadSide';
 export type TargetHeight = 'body' | 'head';
-export const ATTACK_KINDS: AttackKind[] = ['punch', 'front', 'round', 'side', 'back'];
+export const ATTACK_KINDS: AttackKind[] = ['punch', 'front', 'round', 'side', 'back', 'leadFront', 'leadRound', 'leadSide'];
+/** Lead-leg technique for a rear-leg kick, where one exists. */
+export const LEAD_OF: Partial<Record<AttackKind, AttackKind>> = { front: 'leadFront', round: 'leadRound', side: 'leadSide' };
 
 /**
  * Raw device-level actions for one rendered frame. Movement is in screen /
@@ -17,6 +19,8 @@ export interface ActionState {
   guard: boolean;
   /** Head-target modifier (held). */
   high: boolean;
+  /** Lead-leg modifier (held): kick keys throw the lead-leg version. */
+  lead: boolean;
   attack: AttackKind | null;
   /** Height requested together with `attack` (gestures can set this directly). */
   attackHeight: TargetHeight | null;
@@ -36,6 +40,7 @@ export function emptyActions(): ActionState {
     moveY: 0,
     guard: false,
     high: false,
+    lead: false,
     attack: null,
     attackHeight: null,
     dash: false,

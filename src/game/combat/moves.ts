@@ -14,7 +14,7 @@ export interface MoveDef {
   id: AttackKind;
   name: string;
   korean: string;
-  limb: 'rearFoot' | 'rearHand';
+  limb: 'rearFoot' | 'leadFoot' | 'rearHand';
   startup: number;
   active: number;
   recovery: number;
@@ -35,6 +35,12 @@ export interface MoveDef {
   advance: number;
   /** Spinning technique (WT awards bonus points for turning kicks). */
   turning: boolean;
+  /**
+   * How far the body rotates away from the opponent before the strike lands
+   * (degrees). Turning-kick eligibility requires >= 180 (back turned to the
+   * opponent during delivery); the hip turnover of a roundhouse does not count.
+   */
+  turnDegrees: number;
   /** Ticks into recovery after which a successful hit can be chained. */
   cancelAfter: number;
 }
@@ -64,6 +70,7 @@ export const MOVES: Record<AttackKind, MoveDef> = {
     pushback: 1.2,
     advance: 0.12,
     turning: false,
+    turnDegrees: 0,
     cancelAfter: 4,
   },
   front: {
@@ -85,6 +92,7 @@ export const MOVES: Record<AttackKind, MoveDef> = {
     pushback: 2.2,
     advance: 0.15,
     turning: false,
+    turnDegrees: 0,
     cancelAfter: 8,
   },
   round: {
@@ -106,6 +114,7 @@ export const MOVES: Record<AttackKind, MoveDef> = {
     pushback: 2.0,
     advance: 0.1,
     turning: false,
+    turnDegrees: 0,
     cancelAfter: 8,
   },
   side: {
@@ -127,6 +136,7 @@ export const MOVES: Record<AttackKind, MoveDef> = {
     pushback: 3.6,
     advance: 0.2,
     turning: false,
+    turnDegrees: 0,
     cancelAfter: 12,
   },
   back: {
@@ -139,16 +149,87 @@ export const MOVES: Record<AttackKind, MoveDef> = {
     recovery: 24,
     stamina: 18,
     damage: 17,
-    heights: ['body'],
+    heights: ['body', 'head'],
     chamber: [0.0, 0.88, 0.28],
-    impact: { body: [0.0, 1.1, 1.12], head: [0.0, 1.1, 1.12] },
+    impact: { body: [0.0, 1.1, 1.12], head: [0.0, 1.5, 1.02] },
     radius: 0.13,
     hitstun: 30,
     blockstun: 14,
     pushback: 4.2,
     advance: 0.15,
     turning: true,
+    turnDegrees: 180,
     cancelAfter: 99,
+  },
+  // Lead-leg techniques: thrown with the front leg, weight loaded onto the
+  // rear (support) leg. Faster and cheaper than their rear-leg versions,
+  // shorter hip drive (less pushback/damage), quicker recovery but a smaller
+  // cancel window. Geometry is on the lead (+side) half for orthodox.
+  leadFront: {
+    id: 'leadFront',
+    name: 'Lead front kick',
+    korean: 'Apbal ap chagi',
+    limb: 'leadFoot',
+    startup: 8,
+    active: 3,
+    recovery: 14,
+    stamina: 7,
+    damage: 6,
+    heights: ['body', 'head'],
+    chamber: [0.08, 0.74, 0.46],
+    impact: { body: [0.06, 1.1, 1.06], head: [0.06, 1.48, 0.94] },
+    radius: 0.1,
+    hitstun: 16,
+    blockstun: 8,
+    pushback: 1.7,
+    advance: 0.1,
+    turning: false,
+    turnDegrees: 0,
+    cancelAfter: 6,
+  },
+  leadRound: {
+    id: 'leadRound',
+    name: 'Lead roundhouse',
+    korean: 'Apbal dollyeo chagi',
+    limb: 'leadFoot',
+    startup: 7,
+    active: 3,
+    recovery: 14,
+    stamina: 8,
+    damage: 7,
+    heights: ['body', 'head'],
+    chamber: [0.34, 0.96, 0.46],
+    impact: { body: [0.0, 1.12, 1.08], head: [0.0, 1.52, 0.96] },
+    radius: 0.11,
+    hitstun: 16,
+    blockstun: 9,
+    pushback: 1.4,
+    advance: 0.16,
+    turning: false,
+    turnDegrees: 0,
+    cancelAfter: 6,
+  },
+  leadSide: {
+    id: 'leadSide',
+    name: 'Lead side kick (cut kick)',
+    korean: 'Apbal yeop chagi',
+    limb: 'leadFoot',
+    startup: 9,
+    active: 4,
+    recovery: 16,
+    stamina: 9,
+    damage: 8,
+    heights: ['body', 'head'],
+    chamber: [0.06, 0.9, 0.4],
+    impact: { body: [0.0, 1.1, 1.24], head: [0.0, 1.45, 1.1] },
+    radius: 0.11,
+    hitstun: 18,
+    blockstun: 10,
+    pushback: 3.0,
+    advance: 0.06,
+    turning: false,
+    turnDegrees: 0,
+    cancelAfter: 8,
   },
 };
 
