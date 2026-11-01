@@ -92,6 +92,29 @@ export function MatchScreen() {
     audio.setVolume(settings.volume);
   }, [settings.volume]);
 
+  // Tell the camera how much of the screen the HUD and touch controls cover,
+  // so it frames both fighters inside the unobstructed region.
+  useEffect(() => {
+    if (!session) return;
+    const measure = () => {
+      const H = window.innerHeight || 1;
+      const hud = document.querySelector('.hud-top')?.getBoundingClientRect();
+      const cluster = document.querySelector('.cluster')?.getBoundingClientRect();
+      session.camRig.safe.top = hud ? Math.min(0.3, (hud.bottom + 4) / H) : 0.06;
+      session.camRig.safe.bottom = cluster && showTouch ? Math.min(0.6, (H - cluster.top) / H) : 0;
+      session.camRig.safe.widthFraction = showTouch ? 0.6 : 0.72;
+    };
+    measure();
+    const id = window.setInterval(measure, 1000);
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, [session, showTouch, settings.controlScheme]);
+
   return (
     <div className="match">
       <Canvas

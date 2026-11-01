@@ -5,6 +5,8 @@ export function PauseMenu({ session }: { session: GameSession }) {
   const paused = useGameStore((s) => s.paused);
   const setPaused = useGameStore((s) => s.setPaused);
   const toMenu = useGameStore((s) => s.toMenu);
+  const scheme = useGameStore((s) => s.settings.controlScheme);
+  const update = useGameStore((s) => s.updateSettings);
   if (!paused) return null;
   return (
     <div className="overlay">
@@ -21,6 +23,14 @@ export function PauseMenu({ session }: { session: GameSession }) {
         >
           Restart match
         </button>
+        <div className="seg" role="group" aria-label="Touch controls">
+          <button className={scheme === 'compact' ? 'on' : ''} onClick={() => update({ controlScheme: 'compact' })}>
+            Compact
+          </button>
+          <button className={scheme === 'classic' ? 'on' : ''} onClick={() => update({ controlScheme: 'classic' })}>
+            Classic
+          </button>
+        </div>
         <button onClick={toMenu}>Main menu</button>
       </div>
     </div>

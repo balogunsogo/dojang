@@ -6,6 +6,7 @@ import type { QualitySetting } from '../game/render/quality';
 
 export interface HudState {
   names: [string, string];
+  shortNames: [string, string];
   health: [number, number];
   maxHealth: [number, number];
   stamina: [number, number];
@@ -35,12 +36,18 @@ export interface Settings {
   volume: number;
   /** Show touch controls even when a keyboard is detected. */
   forceTouch: boolean;
+  /** Touch layout: compact (one Kick button + technique wheel) or classic (one button per technique). */
+  controlScheme: 'compact' | 'classic';
+  /** Technique fired by the compact Kick button (persists). */
+  selectedKick: 'front' | 'round' | 'side' | 'back';
+  /** Dismissed the "add to home screen" hint. */
+  pwaHintDismissed: boolean;
 }
 
 const SETTINGS_KEY = 'dojang.settings.v1';
 
 function loadSettings(): Settings {
-  const def: Settings = { quality: 'auto', showPerf: false, volume: 0.8, forceTouch: false };
+  const def: Settings = { quality: 'auto', showPerf: false, volume: 0.8, forceTouch: false, controlScheme: 'compact', selectedKick: 'round', pwaHintDismissed: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };

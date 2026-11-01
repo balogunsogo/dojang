@@ -20,13 +20,15 @@ const check = (name, ok, detail = '') => {
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 
-async function open(ctxOpts, query) {
+async function open(ctxOpts, query, extraSettings = {}) {
   const ctx = await browser.newContext(ctxOpts);
-  await ctx.addInitScript(() => {
+  await ctx.addInitScript((extra) => {
     try {
-      localStorage.setItem('dojang.settings.v1', JSON.stringify({ quality: 'low', showPerf: true, volume: 0, forceTouch: false }));
+      if (sessionStorage.getItem('e2e-init')) return; // keep settings changed during the test
+      sessionStorage.setItem('e2e-init', '1');
+      localStorage.setItem('dojang.settings.v1', JSON.stringify({ quality: 'low', showPerf: true, volume: 0, forceTouch: false, ...extra }));
     } catch {}
-  });
+  }, extraSettings);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -192,26 +194,51 @@ const waitPhase = (page, phase) => page.waitForFunction((p) => window.__dojang.s
 }
 
 // ---------------------------------------------------------- mobile (touch)
-{
-  const { ctx, page, errors } = await open(
-    { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36' },
-    '?start=normal&ai=off',
-  );
-  await waitPhase(page, 'fight');
-  const touchUi = await page.$('[data-testid=touch-controls]');
-  check('mobile: touch controls shown on a touch device', !!touchUi);
+const PHONE = { viewport: { width: 852, height: 393 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' };
+
+async function touchKit(ctx, page) {
   const cdp = await ctx.newCDPSession(page);
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p) => ({ x: p.x, y: p.y, id: p.id, radiusX: 4, radiusY: 4, force: 1 })) });
-  const btn = async (label) => {
-    const b = await page.$(`[aria-label="${label}"]`);
+  const center = async (sel) => {
+    const b = await page.$(sel);
+    if (!b) return null;
     const box = await b.boundingBox();
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   };
-  // Finger 1: joystick on the left, pushed "up" (towards the opponent in the default lock-on view? camera-relative).
+  // Place the fighters in kicking range facing each other and refill stamina.
+  const setRange = (gap = 1.0) =>
+    page.evaluate((gap) => {
+      const s = window.__dojang.session;
+      const [a, b] = s.world.fighters;
+      a.x = 0; a.z = 0; a.yaw = 0; b.x = 0; b.z = gap; b.yaw = Math.PI;
+      a.stamina = b.stamina = 100;
+      b.health = 100;
+      s.world.events.length = 0;
+    }, gap);
+  const idle = () => page.waitForFunction(() => {
+    const f = window.__dojang.session.world.fighters;
+    return f[0].state === 'idle' && f[1].state !== 'hitstun' && f[1].state !== 'blockstun';
+  }, null, { timeout: 30000 });
+  const lastAttack = () => page.evaluate(() => {
+    const f = window.__dojang.session.world.fighters[0];
+    return { id: f.attack?.move.id ?? null, height: f.attack?.height ?? null };
+  });
+  return { touch, center, setRange, idle, lastAttack };
+}
+
+{
+  const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off');
+  await waitPhase(page, 'fight');
+  const touchUi = await page.$('[data-testid=touch-controls].scheme-compact');
+  check('compact: compact scheme is the default on a touch device', !!touchUi);
+  const hudH = await page.evaluate(() => document.querySelector('.hud-top').getBoundingClientRect().height);
+  check('compact: slim scoreboard on a phone (≤ 30 px)', hudH <= 30, `${hudH.toFixed(0)} px`);
+  const { touch, center, setRange, idle, lastAttack } = await touchKit(ctx, page);
+
+  // Joystick toward the opponent.
   const s0 = await world(page);
-  const stick = { id: 1, x: 150, y: 280 };
+  const stick = { id: 1, x: 150, y: 290 };
   await touch('touchStart', [stick]);
-  // Push the stick in the direction that moves the player toward the opponent.
   const dir = await page.evaluate(() => {
     const s = window.__dojang.session;
     const [a, b] = s.world.fighters;
@@ -219,50 +246,145 @@ const waitPhase = (page, phase) => page.waitForFunction((p) => window.__dojang.s
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     const ux = b.x - a.x, uz = b.z - a.z;
     const m = Math.hypot(ux, uz);
-    // Invert intent mapping: moveX = dot(u, right), moveY = dot(u, fwd), right = (-fz, fx).
     return { x: (ux * -fz + uz * fx) / m, y: (ux * fx + uz * fz) / m };
   });
-  const moved = { id: 1, x: stick.x + dir.x * 50, y: stick.y - dir.y * 50 };
+  const moved = { id: 1, x: stick.x + dir.x * 48, y: stick.y - dir.y * 48 };
   await touch('touchMove', [moved]);
   await page.waitForFunction(() => {
     const [a, b] = window.__dojang.session.world.fighters;
     return Math.hypot(a.x - b.x, a.z - b.z) < 1.1;
   }, null, { timeout: 60000 }).catch(() => {});
   const s1 = await world(page);
-  check('mobile: joystick moves the fighter toward the opponent', s1.dist < s0.dist - 0.5, `dist ${s0.dist.toFixed(2)}→${s1.dist.toFixed(2)}`);
-  // Finger 2 holds Guard while finger 1 still holds the stick (multitouch).
-  const guard = await btn('Guard');
-  await touch('touchMove', [moved]);
+  check('compact: joystick moves the fighter toward the opponent', s1.dist < s0.dist - 0.5, `dist ${s0.dist.toFixed(2)}→${s1.dist.toFixed(2)}`);
+
+  // Stick + Guard held together.
+  const guard = await center('[aria-label="Guard"]');
   await touch('touchStart', [moved, { id: 2, ...guard }]);
   await waitTicks(page, 4);
   const sg = await world(page);
-  const stickStill = await page.evaluate(() => window.__dojang.input.touch.moveX !== 0 || window.__dojang.input.touch.moveY !== 0);
-  check('mobile: simultaneous stick + guard (multitouch)', sg.f[0].state === 'guard' && stickStill, `state ${sg.f[0].state}, stick held ${stickStill}`);
-  // Release guard, release stick.
+  const stickHeld = await page.evaluate(() => window.__dojang.input.touch.moveX !== 0 || window.__dojang.input.touch.moveY !== 0);
+  check('compact: simultaneous stick + guard (multitouch)', sg.f[0].state === 'guard' && stickHeld, `state ${sg.f[0].state}, stick ${stickHeld}`);
   await touch('touchEnd', [moved]);
   await touch('touchEnd', []);
   await waitTicks(page, 8);
-  // Finger 3: tap Round while finger 4 drags the camera.
-  const round = await btn('Round');
+
+  // Quick tap on Kick throws the selected technique (default roundhouse), while another finger orbits the camera.
+  await setRange();
+  const kick = await center('[data-testid=kick-main]');
   const yaw0 = await page.evaluate(() => window.__dojang.session.camRig.yaw);
-  const before = await world(page);
-  await touch('touchStart', [{ id: 4, x: 520, y: 120 }]);
-  await touch('touchMove', [{ id: 4, x: 470, y: 120 }]);
-  await touch('touchStart', [{ id: 4, x: 470, y: 120 }, { id: 3, ...round }]);
-  await touch('touchMove', [{ id: 4, x: 430, y: 125 }, { id: 3, ...round }]);
-  await touch('touchEnd', [{ id: 4, x: 430, y: 125 }]);
+  await touch('touchStart', [{ id: 4, x: 430, y: 150 }]);
+  await touch('touchMove', [{ id: 4, x: 400, y: 150 }]);
+  await touch('touchStart', [{ id: 4, x: 400, y: 150 }, { id: 3, ...kick }]);
+  await touch('touchMove', [{ id: 4, x: 370, y: 152 }, { id: 3, ...kick }]);
+  await touch('touchEnd', [{ id: 4, x: 370, y: 152 }]);
   await touch('touchEnd', []);
   await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a1 = await lastAttack();
   if (shots) {
     await waitTicks(page, 9);
-    await page.screenshot({ path: `${shots}/mobile-landscape.jpg`, type: 'jpeg', quality: 80 });
+    await page.screenshot({ path: `${shots}/mobile-compact.jpg`, type: 'jpeg', quality: 80 });
   }
-  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'idle', null, { timeout: 30000 });
-  const after = await world(page);
+  await idle();
   const yaw1 = await page.evaluate(() => window.__dojang.session.camRig.yaw);
-  check('mobile: Round button lands a kick', after.f[1].hp < before.f[1].hp, `hp ${before.f[1].hp}→${after.f[1].hp}`);
-  check('mobile: camera drag works during a button press', Math.abs(yaw1 - yaw0) > 0.05, `yaw Δ ${(yaw1 - yaw0).toFixed(3)}`);
-  check('mobile: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  const hp1 = (await world(page)).f[1].hp;
+  check('compact: tap Kick throws the selected roundhouse and lands', a1.id === 'round' && hp1 < 100, `${a1.id}, hp ${hp1}`);
+  check('compact: camera orbit in the open area during a Kick tap', Math.abs(yaw1 - yaw0) > 0.05, `yaw Δ ${(yaw1 - yaw0).toFixed(3)}`);
+
+  // Slide from Kick to the left: wheel opens, release on Side selects and throws it.
+  await setRange(1.1);
+  await touch('touchStart', [{ id: 5, ...kick }]);
+  await touch('touchMove', [{ id: 5, x: kick.x - 25, y: kick.y - 8 }]);
+  const wheelOpen = !!(await page.$('[data-testid=kick-wheel]'));
+  await touch('touchMove', [{ id: 5, x: kick.x - 70, y: kick.y - 22 }]);
+  if (shots) await page.screenshot({ path: `${shots}/mobile-wheel.jpg`, type: 'jpeg', quality: 80 });
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a2 = await lastAttack();
+  const sel = await page.evaluate(() => JSON.parse(localStorage.getItem('dojang.settings.v1')).selectedKick);
+  check('compact: sliding from Kick opens the technique wheel', wheelOpen);
+  check('compact: releasing on Side throws a side kick and selects it', a2.id === 'side' && sel === 'side', `attack ${a2.id}, selected ${sel}`);
+  await idle();
+
+  // The selection persists: a plain tap now repeats the side kick.
+  await setRange(1.1);
+  await touch('touchStart', [{ id: 6, ...kick }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a3 = await lastAttack();
+  check('compact: selected technique repeats on tap without reopening the wheel', a3.id === 'side', `${a3.id}`);
+  const label = await page.$eval('[data-testid=kick-main] .l', (e) => e.textContent);
+  check('compact: Kick button shows the selected technique', label === 'Side', label);
+  await idle();
+
+  // Slide up past the outer ring: head-height front kick.
+  await setRange(0.95);
+  await touch('touchStart', [{ id: 7, ...kick }]);
+  await touch('touchMove', [{ id: 7, x: kick.x, y: kick.y - 40 }]);
+  await touch('touchMove', [{ id: 7, x: kick.x + 2, y: kick.y - 165 }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a4 = await lastAttack();
+  check('compact: slide past the outer ring throws a head kick', a4.id === 'front' && a4.height === 'head', `${a4.id} ${a4.height}`);
+  await idle();
+
+  // Head/Body chip, Punch, stance switch.
+  const chip = await center('[aria-label="Target height"]');
+  await touch('touchStart', [{ id: 8, ...chip }]);
+  await touch('touchEnd', []);
+  await setRange(0.9);
+  await touch('touchStart', [{ id: 9, ...kick }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  const a5 = await lastAttack();
+  check('compact: Head chip makes the Kick button aim high', a5.height === 'head', `${a5.id} ${a5.height}`);
+  await idle();
+  await touch('touchStart', [{ id: 8, ...chip }]);
+  await touch('touchEnd', []);
+  const punch = await center('[aria-label="Punch"]');
+  await touch('touchStart', [{ id: 10, ...punch }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].attack?.move.id === 'punch', null, { timeout: 10000 }).catch(() => {});
+  check('compact: Punch button throws a punch', (await lastAttack()).id === 'punch');
+  await idle();
+  const stance0 = await page.evaluate(() => window.__dojang.session.world.fighters[0].stance);
+  const sw = await center('[aria-label="Switch stance"]');
+  await touch('touchStart', [{ id: 11, ...sw }]);
+  await touch('touchEnd', []);
+  await waitTicks(page, 14);
+  const stance1 = await page.evaluate(() => window.__dojang.session.world.fighters[0].stance);
+  check('compact: stance switch button changes stance', stance0 !== stance1, `${stance0}→${stance1}`);
+  check('compact: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+{
+  const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off', { controlScheme: 'classic' });
+  await waitPhase(page, 'fight');
+  check('classic: classic scheme can be selected', !!(await page.$('[data-testid=touch-controls].scheme-classic')));
+  const { touch, center, setRange, idle, lastAttack } = await touchKit(ctx, page);
+  for (const [label, id] of [['Front', 'front'], ['Round', 'round'], ['Side', 'side'], ['Back', 'back']]) {
+    await setRange(1.0);
+    const b = await center(`[aria-label="${label}"]`);
+    await touch('touchStart', [{ id: 1, ...b }]);
+    await touch('touchEnd', []);
+    await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+    const a = await lastAttack();
+    await idle();
+    const hp = (await world(page)).f[1].hp;
+    check(`classic: ${label} button lands`, a.id === id && hp < 100, `${a.id}, hp ${hp}`);
+  }
+  if (shots) await page.screenshot({ path: `${shots}/mobile-classic.jpg`, type: 'jpeg', quality: 80 });
+  check('classic: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+{
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const res = await page.goto(base + 'manifest.webmanifest');
+  const m = res && res.ok() ? await res.json() : null;
+  const icon = await page.goto(base + 'icons/icon-192.png');
+  check('pwa: manifest and icons are served', !!m && m.display === 'fullscreen' && !!icon?.ok(), m ? `display ${m.display}` : 'missing');
   await ctx.close();
 }
 
