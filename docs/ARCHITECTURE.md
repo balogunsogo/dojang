@@ -37,8 +37,9 @@ src/
     perf/PerfMonitor.ts frame-time stats + renderer counters
     GameSession.ts      orchestrator for one match
   store/useGameStore.ts Zustand: screens, HUD snapshot, toasts, settings
-  ui/                   React DOM UI (menu, HUD, touch controls, overlays)
-  lab/poseLab.ts        animation review tool (?lab=poses)
+  ui/                   React DOM UI (menu, HUD, touch controls + wheel.ts, overlays, PWA hint)
+  lab/poseLab.ts        key-pose contact sheet (?lab=poses)
+  lab/motionLab.ts      deterministic filmstrips of scripted exchanges (?lab=motion)
 ```
 
 ## Data flow per rendered frame
@@ -77,6 +78,8 @@ The rig is the CC0 Quaternius mannequin: 53 Blender-style deform bones, where lo
 3. **Sourced clips** (Hit_Chest, Hit_Head, Death01, Idle_Loop) are sampled at a time derived from sim state, never wall-clock time, so they stay deterministic during hit stop and pause.
 4. **Crossfades:** when the source changes, all bone rotations are snapshotted and the new source is blended in over 3–9 frames.
 5. Fists are a fixed finger curl, and the head counter-rotates to keep looking at the opponent.
+
+**Phase 1.5 layers** (all presentation only): stance life (breathing, weight shift, seeded bounce, guard drift, acceleration lean); `FootPlanner` (planted feet, discrete steps, pivots); outcome-aware technique keys with seeded variation; procedural `hitPose` and `blockPose` driven by `reactionEnvelope`; and time-based ease-out cross-fades.
 
 Both the strike-point sweep in the simulation and the IK ankle targets in animation come from the same `MoveDef.chamber` and `MoveDef.impact` data.
 

@@ -26,7 +26,7 @@ Every asset shipped in the repository or generated at runtime is listed here wit
 |---|---|---|
 | Fighting stance, guard, footwork, dash, stance switch | **Original procedural** (IK key poses, `src/game/anim/poses.ts`) | Functional |
 | Front, roundhouse, side and back kicks; straight punch | **Original procedural** key poses solved with analytic IK on the CC0 rig | Functional. Reviewed visually in `docs/media/kicks-*.jpg`. Hand-authored, not motion capture. |
-| Hit reactions (body, head) | Quaternius `Hit_Chest`, `Hit_Head` (CC0) | Functional |
+| Hit reactions (body, head) | **Original procedural** reaction layers (`hitPose`, `blockPose` in `poses.ts`) since Phase 1.5. The Quaternius `Hit_Chest` and `Hit_Head` clips are still shipped but unused (D-011). | Functional |
 | Knockdown | Quaternius `Death01` (CC0) | Functional; a generic fall, not Taekwondo-specific |
 | Victory idle | Quaternius `Idle_Loop` (CC0) | Placeholder for a proper bow / victory pose (Phase 5) |
 
@@ -37,6 +37,10 @@ Every asset shipped in the repository or generated at runtime is listed here wit
 - The CC0 Quaternius free library has no kicks.
 
 The procedural kicks are an intentional, documented choice: the motion is Taekwondo-specific (chamber, pivot, extension, rechamber) and lines up exactly with the hit frames. Motion-captured kicks would be smoother. To swap them in later, add clips on the same skeleton, select them in `FighterAnimator.pickSource()`, and keep the timing aligned with `MoveDef` frame data.
+
+## App icons (Phase 1.5)
+
+`public/icons/*.png` are original artwork (a red/blue taegeuk on a dark field), rendered by `scripts/make-icons.mjs`. `public/manifest.webmanifest` references them.
 
 ## Generated at runtime (no files)
 
