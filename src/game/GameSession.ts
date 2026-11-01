@@ -1,0 +1,290 @@
+import * as THREE from 'three';
+import { AIController, type Difficulty } from './ai/AIController';
+import { FighterAnimator } from './anim/FighterAnimator';
+import { audio } from './audio/AudioEngine';
+import { CameraRig } from './camera/CameraRig';
+import { type CombatEvent, CombatWorld } from './combat/CombatWorld';
+import { DT, MAX_STEPS_PER_FRAME } from './config';
+import { type ActionState, emptyIntent, type FighterIntent } from './input/actions';
+import type { InputManager } from './input/InputManager';
+import { approachAngle, wrapAngle } from './math';
+import { PerfMonitor } from './perf/PerfMonitor';
+import { CHARACTERS, type CharacterDef, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
+import { buildDojang, type DojangHandle } from './render/Dojang';
+import { Effects } from './render/Effects';
+import { DynamicResolution, type QualityProfile } from './render/quality';
+import { ArcadeRules } from './rules/rules';
+import type { HudState, Toast } from '../store/useGameStore';
+import type { PerfSnapshot } from './perf/PerfMonitor';
+
+export interface SessionCallbacks {
+  onHud(h: HudState): void;
+  onToast(t: Omit<Toast, 'id'>, ms?: number): void;
+  onPerf(p: PerfSnapshot): void;
+  onPauseToggle(): void;
+}
+
+export interface SessionOptions {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  gl: THREE.WebGLRenderer;
+  input: InputManager;
+  quality: QualityProfile;
+  difficulty: Difficulty;
+  aiEnabled: boolean;
+  callbacks: SessionCallbacks;
+}
+
+interface Prev {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/**
+ * Orchestrates one sparring session: fixed-step simulation, AI, input
+ * mapping, animation, camera, effects, audio and HUD publishing. React only
+ * mounts it; nothing here runs inside React render.
+ */
+export class GameSession {
+  readonly world: CombatWorld;
+  readonly ai: AIController;
+  readonly camRig = new CameraRig();
+  readonly perf = new PerfMonitor();
+  private readonly o: SessionOptions;
+  private chars: CharacterInstance[] = [];
+  private anims: FighterAnimator[] = [];
+  private env: DojangHandle | null = null;
+  private fx: Effects | null = null;
+  private acc = 0;
+  private prev: [Prev, Prev] = [
+    { x: 0, z: 0, yaw: 0 },
+    { x: 0, z: 0, yaw: 0 },
+  ];
+  private hudTimer = 0;
+  private perfTimer = 0;
+  private lastPhase = '';
+  private dynRes: DynamicResolution;
+  paused = false;
+  ready = false;
+  /** Visual yaw per fighter, smoothed toward the sim yaw. */
+  private visYaw = [0, Math.PI];
+  readonly defs: [CharacterDef, CharacterDef] = [CHARACTERS.jae, CHARACTERS.hana];
+
+  constructor(o: SessionOptions) {
+    this.o = o;
+    this.world = new CombatWorld(ArcadeRules, [this.defs[0].stats, this.defs[1].stats]);
+    this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
+    this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
+  }
+
+  async init() {
+    const gltf = await loadFighterAsset();
+    this.env = buildDojang(this.o.quality);
+    this.o.scene.add(this.env.group);
+    const corners = ['chung', 'hong'] as const;
+    for (let i = 0; i < 2; i++) {
+      const c = createCharacter(gltf, this.defs[i], corners[i], i === 0 ? 'green' : 'yellow');
+      this.o.scene.add(c.group);
+      this.chars.push(c);
+      this.anims.push(new FighterAnimator(c.group, c.model, c.clips));
+    }
+    this.fx = new Effects(!this.o.quality.shadows);
+    this.o.scene.add(this.fx.group);
+    this.syncPrev();
+    this.ready = true;
+  }
+
+  private syncPrev() {
+    this.world.fighters.forEach((f, i) => {
+      this.prev[i] = { x: f.x, z: f.z, yaw: f.yaw };
+      this.visYaw[i] = f.yaw;
+    });
+  }
+
+  rematch() {
+    this.world.resetMatch();
+    this.syncPrev();
+    this.lastPhase = '';
+  }
+
+  /** Map device actions (camera-relative) to a world-space fighter intent. */
+  private playerIntent(a: ActionState): FighterIntent {
+    const intent = emptyIntent();
+    const yaw = this.camRig.viewYaw;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    // Camera right = (-fz, fx).
+    intent.moveX = -fz * a.moveX + fx * a.moveY;
+    intent.moveZ = fx * a.moveX + fz * a.moveY;
+    intent.guard = a.guard;
+    intent.attack = a.attack;
+    intent.height = a.attackHeight ?? (a.high ? 'head' : 'body');
+    intent.dash = a.dash;
+    intent.switchStance = a.switchStance;
+    return intent;
+  }
+
+  frame(dtRaw: number) {
+    if (!this.ready) return;
+    const dt = Math.min(dtRaw, 0.1);
+    const t0 = performance.now();
+    const actions = this.o.input.poll();
+    if (actions.pause) {
+      this.o.input.consumeEdges();
+      this.o.callbacks.onPauseToggle();
+    }
+    if (actions.toggleLock) this.camRig.lockOn = !this.camRig.lockOn;
+    this.camRig.input(actions.camYaw, actions.camPitch, actions.camZoom);
+
+    const w = this.world;
+    const [p, o] = w.fighters;
+    if (!this.paused) {
+      this.acc += dt;
+      let steps = 0;
+      let first = true;
+      while (this.acc >= DT && steps < MAX_STEPS_PER_FRAME) {
+        this.syncPrevPositions();
+        const pi = this.playerIntent(actions);
+        if (!first) {
+          pi.attack = null;
+          pi.dash = false;
+          pi.switchStance = false;
+        }
+        const ai = this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
+        w.step([pi, ai]);
+        if (first) this.o.input.consumeEdges();
+        first = false;
+        this.acc -= DT;
+        steps++;
+        this.handleEvents();
+      }
+      if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
+    } else {
+      this.o.input.consumeEdges();
+    }
+    const t1 = performance.now();
+
+    // Render interpolation.
+    const alpha = w.hitstop > 0 || this.paused ? 1 : this.acc / DT;
+    const animAlpha = w.hitstop > 0 || this.paused ? 0 : this.acc / DT;
+    w.fighters.forEach((f, i) => {
+      const pr = this.prev[i];
+      const x = pr.x + (f.x - pr.x) * alpha;
+      const z = pr.z + (f.z - pr.z) * alpha;
+      const yaw = pr.yaw + wrapAngle(f.yaw - pr.yaw) * alpha;
+      this.visYaw[i] = approachAngle(this.visYaw[i], yaw, 14 * dt);
+      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i]);
+    });
+    const t2 = performance.now();
+
+    this.camRig.update(this.o.camera, dt, p.x, p.z, o.x, o.z);
+    this.fx?.update(dt, this.o.camera, w.fighters);
+
+    this.hudTimer -= dt;
+    if (this.hudTimer <= 0) {
+      this.hudTimer = 1 / 12;
+      this.publishHud(actions);
+    }
+    this.perf.frame(dtRaw, t1 - t0, t2 - t1);
+    this.perfTimer -= dt;
+    if (this.perfTimer <= 0) {
+      this.perfTimer = 0.5;
+      this.o.callbacks.onPerf(this.perf.sample(this.o.gl, this.o.quality.tier));
+      const newDpr = this.dynRes.update(0.5, this.perf.avgMs, window.devicePixelRatio || 1);
+      if (newDpr !== null) this.o.gl.setPixelRatio(newDpr);
+    }
+  }
+
+  private syncPrevPositions() {
+    this.world.fighters.forEach((f, i) => {
+      const pr = this.prev[i];
+      pr.x = f.x;
+      pr.z = f.z;
+      pr.yaw = f.yaw;
+    });
+  }
+
+  private handleEvents() {
+    const w = this.world;
+    const toast = this.o.callbacks.onToast;
+    if (w.phase !== this.lastPhase) {
+      if (w.phase === 'intro') toast({ text: `Round ${w.round}`, sub: 'Joon-bi! (Ready)', side: null, kind: 'call' }, 1600);
+      if (w.phase === 'fight' && this.lastPhase === 'intro') toast({ text: 'Shi-jak!', sub: 'Begin', side: null, kind: 'call' }, 900);
+      this.lastPhase = w.phase;
+    }
+    for (const e of w.events) this.onEvent(e);
+    w.events.length = 0;
+  }
+
+  private onEvent(e: CombatEvent) {
+    const toast = this.o.callbacks.onToast;
+    switch (e.type) {
+      case 'attack':
+        if (e.move.limb === 'rearFoot') audio.whoosh(e.move.id === 'back' || e.move.id === 'side' ? 1.3 : 1);
+        else audio.whoosh(0.5);
+        break;
+      case 'hit': {
+        const heavy = e.counter || e.zone === 'head' || e.move.pushback > 3;
+        audio.hit(e.zone, heavy);
+        this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
+        this.camRig.addShake(heavy ? 0.07 : 0.035);
+        if (e.counter) toast({ text: 'Counter!', side: e.attacker, kind: 'hit' });
+        else if (e.zone === 'head') toast({ text: 'Head kick!', side: e.attacker, kind: 'hit' });
+        else if (e.move.turning) toast({ text: 'Turning kick!', side: e.attacker, kind: 'hit' });
+        break;
+      }
+      case 'block':
+        audio.block();
+        this.fx?.spawn(e.point, 'block');
+        if (e.guardBreak) toast({ text: 'Guard break!', side: e.attacker, kind: 'hit' });
+        break;
+      case 'ko':
+        toast({ text: 'K.O.', side: e.fighter === 0 ? 1 : 0, kind: 'call' }, 2000);
+        this.camRig.addShake(0.1);
+        break;
+      case 'round-start':
+        audio.bell(1);
+        break;
+      case 'round-end': {
+        audio.bell(3);
+        const who = e.winner === null ? 'Draw' : `${this.defs[e.winner].name.split(' ').pop()} wins the round`;
+        toast({ text: 'Keu-man!', sub: `${who}${e.reason === 'time' ? ' (time)' : ''}`, side: null, kind: 'call' }, 2600);
+        break;
+      }
+      case 'match-end':
+        break;
+    }
+  }
+
+  private publishHud(a: ActionState) {
+    const w = this.world;
+    const [p, o] = w.fighters;
+    this.o.callbacks.onHud({
+      names: [this.defs[0].name, this.defs[1].name],
+      health: [p.health, o.health],
+      maxHealth: [p.stats.maxHealth, o.stats.maxHealth],
+      stamina: [p.stamina, o.stamina],
+      seconds: w.secondsLeft,
+      round: w.round,
+      wins: [...w.roundWins] as [number, number],
+      roundsToWin: w.rules.roundsToWin,
+      phase: w.phase,
+      matchWinner: w.matchWinner,
+      lastRoundWinner: w.lastRoundWinner,
+      high: a.high,
+      lockOn: this.camRig.lockOn,
+      stance: p.stance,
+    });
+  }
+
+  dispose() {
+    this.ready = false;
+    for (const a of this.anims) a.dispose();
+    for (const c of this.chars) c.dispose();
+    this.env?.dispose();
+    this.fx?.dispose();
+    this.chars = [];
+    this.anims = [];
+  }
+}
