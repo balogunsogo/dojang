@@ -70,7 +70,7 @@ React never sits inside the combat loop. Components subscribe to a throttled HUD
 - `judgeContact`: validity and points for every clean contact
 - `afterContact`: knockdowns
 - `onIllegalContact`: kicks below the waist
-- `afterTick`: boundary, falls, point gap, golden round
+- `afterTick`: boundary, falls, point gap
 - `decideRound`, `matchResult`, `roundLength`
 
 The world also has a `break` phase (Kal-yeo: the clock stops, techniques started during it are detected) and a public `endRound()`. Arcade provides no hooks.

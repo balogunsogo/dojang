@@ -6,10 +6,9 @@ Phase 2 adds a WT-inspired Competitive mode, three lead-leg kicks, and a new AI 
 
 **Edition:** World Taekwondo *Competition Rules & Interpretation*, in force as of **June 1, 2026**.
 
-**How the values were verified.** The official PDF exists (worldtaekwondo.org, uploaded May 2026), but this session's network policy blocks worldtaekwondo.org and the federation sites. So the values come from:
-- search excerpts of the official document
-- federation bulletins summarising the 2026 changes: USA Taekwondo (April 2026 rules update, General Assembly in Tashkent, April 10, 2026) and Taekwondo Canada (January 2026)
-- secondary rule summaries
+**Reference copy:** [Competition Rules and Interpretation from 01.06.2026](https://www.taekwondo.dk/files/Dokumenter/Statisk/Dommer/Regler/Competition%20Rules%20and%20Interpretation%20from%2001.06.2026.pdf) (Danish Taekwondo Federation mirror). The product owner reviewed it and approved the rule decisions in the Phase 2 review of PR #3: Articles 7.1.2, 14 and 15.5.
+
+**How the values were verified.** This build environment still cannot open the PDF: its network policy blocks taekwondo.dk, worldtaekwondo.org and the federation sites. So the article-level decisions below come from the product owner's review. The remaining values come from search excerpts of the official document and federation bulletins summarising the 2026 changes (USA Taekwondo April 2026 update; Taekwondo Canada, January 2026).
 
 Every value lives in `src/game/rules/competitive/config.ts` (`WT_2026`) and can be corrected without touching game logic.
 
@@ -21,13 +20,13 @@ Every value lives in `src/game/rules/competitive/config.ts` (`WT_2026`) and can 
 | Turning kick to trunk | 4 (double the base) | Confirmed: "turning kicks score double their base value" |
 | Turning kick to head | 6 | Confirmed: raised from 5 to 6 in 2026 |
 | Gam-jeom | +1 to the opponent | Confirmed |
-| Passive gam-jeom in the last 10 s of a round | +2 to the opponent | Reported by federation summaries for June 2026; the official text is unseen |
+| Passive gam-jeom in the last 10 s of a round | +2 to the opponent (boundary and fall only) | **Open:** asked to verify against Art. 14; reported by federation summaries, not yet checked against the text here. Configurable (`passiveLateGamjeomPoints`, `passiveLateWindowSeconds`). |
 | Point gap ending a round | 15 | Reported: raised from 12 to 15 (General Assembly, April 2026, effective June 2026) |
 | Boundary | Gam-jeom when **any part of the foot** crosses the line, unless caused by the opponent's prohibited act | Reported 2026 wording |
-| Best of three rounds | Each round starts 0–0; the first to win 2 rounds wins | Confirmed |
-| Round tie-break order | Turning-kick points, then highest technical value, then fewer gam-jeom, then referee's superiority decision | **One secondary source**; needs checking against Article 15 |
-| Gam-jeom limit | **5 per round loses the round** | **UNVERIFIED**: sources disagree (5 per round vs. 10 per match) |
-| Round length | **90 s** in the game | WT seniors fight 2:00 rounds; shortened for game pacing (needs approval) |
+| Best of three rounds | Each round starts 0–0; the first to win 2 rounds wins; **no fourth (golden) round** | Art. 7.1.2 (approved review) |
+| Round tie-break (best of three) | a. turning-kick points; b. head, then trunk, then punch, then gam-jeom points; c. registered valid hits; d. game-specific deterministic fallback where a referee would decide | Art. 15.5 (approved review); fallback is the game's own |
+| Gam-jeom limits | **5 in one round lose that round; 10 cumulative in the match lose the match** | Art. 14 (approved review) |
+| Round length | **60 / 90 / 120 s**, selectable; **90 s default**; **120 s is the WT senior standard** | Approved review |
 
 ## B. Competitive implementation
 
@@ -37,8 +36,8 @@ Code: `src/game/rules/competitive/`. The responsibilities are separated:
 |---|---|---|
 | Attack validation | `validation.ts` | Is the contact a valid technique on a valid zone with enough delivered force? |
 | Point calculation | `scoring.ts` | Technique, zone and turning → points (from config) |
-| Penalties, stoppages, flow | `CompetitiveRules.ts` | Gam-jeom detection and accumulation, Kal-yeo/Kye-sok, point gap, golden round, round history |
-| Round outcome and match result | `rounds.ts` | Pure tie-break chain; best of three plus golden round |
+| Penalties, stoppages, flow | `CompetitiveRules.ts` | Gam-jeom detection and accumulation (per round and per match), Kal-yeo/Kye-sok, point gap, round history |
+| Round outcome and match result | `rounds.ts` | Art. 15.5 tie-break chain; best of three (Art. 7.1.2) |
 
 The engine calls the ruleset through optional hooks on the `Ruleset` interface (`rules.ts`: `RuleHooks`). Arcade implements none of them, so its code path is unchanged.
 
@@ -83,20 +82,27 @@ Only objectively detectable infractions are implemented:
 ### Round and match outcomes
 
 **Rounds:**
-- A round ends on time, on the 15-point gap, or on the gam-jeom limit.
-- A round that runs the full time is decided by points, then the tie-break chain:
-  1. turning-kick points
-  2. technical value: counts compared from turning head down to punch
-  3. fewer gam-jeom
-- The referee's superiority decision can't be simulated fairly, so it is replaced by objective proxies:
-  - more techniques delivered to the opponent, including blocked ones
-  - then whoever scored first
-- If every step is level, the round is **drawn**.
+- A round lasts 60, 90 (default) or 120 s, chosen in the menu when Competitive is selected.
+- A round ends on time, on the 15-point gap, on **5 gam-jeom in the round** (that fighter loses the round), or on the **10th gam-jeom of the match** (that fighter loses the match).
+- A round that runs the full time goes to the fighter with more points. If points are tied, **Article 15.5** decides:
+  - a. more points from turning (spinning) kicks
+  - b. higher-value scores, compared in order: head points (including turning head kicks), trunk points (including turning body kicks), punch points, then points received from the opponent's gam-jeom
+  - c. more **registered valid hits**: clean contacts on the trunk protector or headgear (see open issues)
+  - d. **game decision** (deterministic fallback; *not* an official WT referee decision), used only where WT relies on the referee's superiority judgement:
+    1. more techniques delivered to the opponent, including blocked ones
+    2. more techniques thrown
+    3. fewer gam-jeom
+    4. threw the first technique
+    5. if neither fighter threw anything, the round goes to Hong, an arbitrary fixed last resort
 
-**Match:**
-- Best of three.
-- A **golden round** (60 s, the first point wins) is fought only if the fighters are level after three rounds, which can happen when a round is drawn.
-- If the golden round is also level, the match is drawn.
+    The results screen labels these steps "Game decision: …".
+- **A round is never drawn.**
+
+**Match (Art. 7.1.2):** best of three. The first fighter to win two rounds wins, so a match lasts two or three rounds. **There is no golden round.** A traditional aggregate-score format (with a golden round) can be added later as a separate ruleset configuration; it is not implemented now.
+
+**Display:**
+- The HUD shows `GJn` for the current round's gam-jeom, plus `/m` with the match total once it differs.
+- The results screen lists gam-jeom per fighter for the whole match, with reasons.
 
 **Results screen:**
 - winner and rounds won
@@ -174,11 +180,11 @@ The hit sweep uses the same `MoveDef` geometry as the IK targets, and the kicks 
 
 ## F. Tests
 
-`npm test`: **87 tests across 5 files** (36 before Phase 2). The new Phase 2 tests:
+`npm test`: **96 tests across 5 files** (36 before Phase 2; 87 at first review, then 96 after the rules corrections). The new Phase 2 tests:
 
 | File | Tests | Covers |
 |---|---|---|
-| `tests/competitive.test.ts` | 38 | Every scoring technique's points, including lead kicks, the turning head kick 6 and turning trunk 4. Roundhouse never turning. Jammed kicks, blocked, whiffed and out-of-range attacks score nothing. No damage in Competitive. Boundary gam-jeom with Kal-yeo and position reset; the late ×2; retreating never penalized. Attack after Kal-yeo, with grace; contact during a stoppage void; attacking a fallen opponent; below-waist geometry and penalty; the gam-jeom limit; self-fall penalty; knockdown not penalized. Point gap; the clock stops during Kal-yeo; tie-break chain; best of three and golden round; a full match through a golden round; rematch reset. Arcade unaffected: no points, the mat clamp, no penalties or stoppages. Lead kicks faster, cheaper, shorter, lead-side and mirrored, landing earlier, and counter-hitting slower kicks. |
+| `tests/competitive.test.ts` | 47 | Every scoring technique's points, including lead kicks, the turning head kick 6 and turning trunk 4. Roundhouse never turning. Jammed kicks, blocked, whiffed and out-of-range attacks score nothing. No damage in Competitive. Boundary gam-jeom with Kal-yeo and position reset; the late ×2; retreating never penalized. Attack after Kal-yeo, with grace; contact during a stoppage void; attacking a fallen opponent; below-waist geometry and penalty; the gam-jeom limit; self-fall penalty; knockdown not penalized. Point gap; the clock stops during Kal-yeo; Art. 15.5 priorities a–c in order and the labelled game fallback (never a draw); best of three with no golden round; a full three-round match decided by tie-breaks; a 2-0 match in two rounds; rematch reset. Round durations 60/90/120 (clock, timeout, next round; default 90; senior 120). 5 gam-jeom lose the round; 10 cumulative lose the match; passive late ×2. Arcade unaffected: no points, the mat clamp, no penalties or stoppages. Lead kicks faster, cheaper, shorter, lead-side and mirrored, landing earlier, and counter-hitting slower kicks. |
 | `tests/ai.test.ts` | 12 | Black belt beats white belt (Arcade and Competitive) and red beats white in seeded matches. Block rate rises with difficulty. No reaction faster than the perception delay. Punishes whiffs more at higher difficulty. Black belt spots a repeated technique and white belt doesn't. Distance kept in kicking range. No voluntary boundary exits (red and black). Escapes the line when trapped. Attacks more when trailing late than when leading. Black belt uses lead kicks for over 20% of attacks. No attacks during Kal-yeo. |
 | `tests/anim-controls.test.ts` | updated | Lead kicks included in the "extension identical across outcomes and seeds" and "recovery ends in stance" checks; wheel inner and outer rings |
 
@@ -224,8 +230,8 @@ Arcade also gains the lead-leg kicks and the back kick to the head, as additions
 
 ## I. Known limitations
 
-- **Rules verification:** WT values come from secondary sources (see §A). Two need approval: the gam-jeom limit and the round length.
-- **Superiority decision:** a referee's judgement is replaced by objective proxies, so a fully level round can be drawn.
+- **Rules verification:** article-level decisions follow the product owner's review of the June 2026 edition. This environment still can't open the PDF. The open interpretation items are listed in HANDOFF.md.
+- **Superiority decision:** where Art. 15.5 leaves the decision to the referee, the game uses a labelled deterministic fallback, not a simulated referee.
 - **Simplified knockdown:** no 8-count and no referee-stops-contest; the fighter always rises.
 - **Penalty coverage:** Kal-yeo resets positions only for boundary calls. Several prohibited acts are intentionally not simulated (§B).
 - **AI:** tuned in simulation, not yet by playtesting. Its anticipatory guarding can read as "psychic" if the player keeps a very regular rhythm (that is by design).
@@ -233,6 +239,6 @@ Arcade also gains the lead-leg kicks and the back kick to the head, as additions
 
 ## J. Recommendations for the next phase (Phase 3 is not started)
 
-1. Confirm the official WT text for the tie-break order, gam-jeom limit, passive late window and round length, then adjust `WT_2026`.
+1. Resolve the open interpretation items in HANDOFF.md: the last-10-seconds passivity rule, what counts as a "registered valid hit", and whether a turning head kick counts under both a. and b. of 15.5.
 2. Run real-device UAT of the wheel's two rings and the Competitive HUD. Tune `WHEEL_LEAD_EDGE`, `WHEEL_HEAD_RADIUS` and `HOLD_MS` from feedback.
 3. Phase 3 scope: hybrid gestures, control customization (left-handed mirror, button scale), real-device profiling.

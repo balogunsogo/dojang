@@ -72,17 +72,25 @@ The camera fits both fighters into the screen region not covered by the HUD and 
 
 `Ruleset.hooks` (judge contact, attack start, after tick, round decision, match result, round length), a stoppage phase in `CombatWorld`, and a public `endRound()`. Arcade implements no hooks, so its path is unchanged. Competitive is a stateful class created per session. Validation, scoring, penalties and round logic live in separate modules.
 
-## D-016: Competitive round length 90 s (needs approval)
+## D-016: Competitive round length (approved)
 
-WT senior rounds are 2:00. The game uses 90 s for pacing on mobile; it's configurable in `WT_2026.roundSeconds`.
+Selectable 60, 90 or 120 s; 90 s is the gameplay default, and 120 s is identified as the WT senior standard (`ROUND_DURATIONS`, `SENIOR_ROUND_SECONDS`). Chosen in the menu, saved in settings, and passed to `CompetitiveRules`.
 
-## D-017: Unverifiable rule details are configurable and flagged
+## D-017: Rule details are configurable and their sources are recorded
 
-The official 2026 PDF could not be read from the build environment. The values are taken from search excerpts and federation summaries. The gam-jeom limit (5 per round) and the tie-break order are flagged for verification rather than guessed silently.
+The build environment cannot read the 2026 PDF. Article-level decisions (7.1.2, 14, 15.5) follow the product owner's review; other values come from search excerpts and federation summaries and are marked as such in PHASE_2.md.
 
-## D-018: Superiority decision replaced by objective proxies
+## D-018: Article 15.5 tie-breaks with a labelled game fallback (approved)
 
-A referee's superiority judgement can't be simulated fairly. After points, turning points, technical value and gam-jeom, ties go to more techniques delivered, then who scored first, otherwise a drawn round (with a golden round if the match is level).
+Tied best-of-three rounds are decided by: a. turning-kick points; b. head, then trunk, then punch, then gam-jeom points; c. registered valid hits. Where WT relies on the referee, a deterministic fallback decides (delivered techniques, thrown techniques, fewer gam-jeom, first attack, Hong as the fixed last resort). It is labelled "Game decision", never presented as a WT referee decision. Rounds are never drawn.
+
+## D-023: No golden round in best of three (approved, Art. 7.1.2)
+
+Phase 2 originally added a golden round when the match was level after three rounds. Article 7.1.2 excludes a fourth round from best of three, so it was removed. The match ends when a fighter wins two rounds. An aggregate-score format with a golden round could later be added as a separate configuration.
+
+## D-024: Gam-jeom limits (approved, Art. 14)
+
+5 gam-jeom in one round lose that round; 10 cumulative across the match lose the match outright (`gamjeomRoundLimit`, `gamjeomMatchLimit`).
 
 ## D-019: Force threshold from extension, not a fake sensor
 

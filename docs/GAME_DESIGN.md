@@ -93,8 +93,8 @@ Based on the World Taekwondo Competition Rules & Interpretation in force from Ju
 | Turning kick to head | 6 |
 | Opponent's gam-jeom | +1 (+2 for a passive gam-jeom in the last 10 s) |
 
-- **Rounds:** 90 s each, best of three; a round ends on time, at a 15-point gap, or on 5 gam-jeom.
-- **Tie-breaks:** turning-kick points, then technical value, then fewer gam-jeom, then objective superiority proxies. A golden round is fought if the match is level after three rounds.
+- **Rounds:** 60, 90 (default) or 120 s (WT senior standard), best of three with no golden round (Art. 7.1.2). A round ends on time, at a 15-point gap, or on 5 gam-jeom in the round. 10 gam-jeom in the match lose the match (Art. 14).
+- **Tie-breaks (Art. 15.5):** turning-kick points; head, trunk, punch, then gam-jeom points; registered hits; then a labelled deterministic game decision. Rounds are never drawn.
 - **Gam-jeom:** boundary, self-inflicted fall, kick below the waist, attack after Kal-yeo, attacking a fallen opponent, punch to the head.
 - **Valid contact** needs a clean, unblocked strike on the scoring zone with enough extension. Only true turning techniques (the back kick) get the turning bonus.
 
