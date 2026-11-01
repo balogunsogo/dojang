@@ -442,9 +442,13 @@ if (runs('competitive')) {
   })();
   // Menu: choose Competitive Sparring, then a difficulty.
   await page.click('[data-testid=mode-competitive]');
+  await page.selectOption('[data-testid=round-length]', '120');
   await page.click('[data-testid=start-normal]');
   await page.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
   await waitPhase(page, 'fight');
+  const len = await page.evaluate(() => window.__dojang.session.competitive.cfg.roundSeconds);
+  const clock = await page.$eval('[data-testid=clock] .time', (e) => Number(e.textContent));
+  check('competitive: 120 s round length selected in the menu drives the clock', len === 120 && clock > 100 && clock <= 120, `cfg ${len}, clock ${clock}`);
   check('competitive: started from the menu with competitive rules', await page.evaluate(() => window.__dojang.session.world.rules.id === 'competitive'));
   const setRange = (gap) =>
     page.evaluate((gap) => {
@@ -522,7 +526,8 @@ if (runs('competitive')) {
   const summary = await page.$eval('[data-testid=comp-summary]', (e) => e.textContent).catch(() => '');
   check('competitive: result screen shows rounds, techniques and penalties', /R1/.test(summary) && /R2/.test(summary) && /Turning head kick/.test(summary) && /Crossing the boundary line/.test(summary), summary.slice(0, 120));
   const winner = await page.evaluate(() => window.__dojang.session.world.matchWinner);
-  check('competitive: player wins the match 2-0', winner === 0);
+  const rounds = await page.evaluate(() => window.__dojang.session.world.round);
+  check('competitive: player wins the match 2-0 in two rounds (no extra round)', winner === 0 && rounds === 2, `winner ${winner}, rounds ${rounds}`);
   if (shots) await page.screenshot({ path: `${shots}/competitive-result.jpg`, type: 'jpeg', quality: 80 });
   await page.click('[data-testid=rematch]');
   await page.waitForFunction(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.points[0] === 0, null, { timeout: 10000 }).catch(() => {});

@@ -94,7 +94,7 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
           {hist.map((h) => (
             <tr key={h.round}>
               <td>
-                {h.golden ? 'Golden' : `R${h.round}`}
+                {`R${h.round}`}
                 <div className="result-why">{h.detail ?? h.reason}</div>
               </td>
               <td className="chung">{h.stats[0].points}</td>
@@ -121,7 +121,7 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
             </tr>
           ))}
           <tr>
-            <td>Gam-jeom</td>
+            <td>Gam-jeom (match total)</td>
             <td className="chung" title={penalties(0).join(', ')}>
               {penalties(0).length}
             </td>

@@ -37,6 +37,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
       difficulty,
       aiEnabled: params.get('ai') !== 'off',
       mode: useGameStore.getState().mode,
+      roundSeconds: useGameStore.getState().settings.compRoundSeconds,
       callbacks: {
         onHud: (h) => useGameStore.getState().setHud(h),
         onToast: (t, ms) => useGameStore.getState().pushToast(t, ms),

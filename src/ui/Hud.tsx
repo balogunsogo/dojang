@@ -22,12 +22,17 @@ export function Hud() {
   if (!hud) return null;
   const comp = hud.mode === 'competitive';
   const pips = (n: number) => Array.from({ length: hud.roundsToWin }, (_, i) => <i key={i} className={`pip ${i < n ? 'on' : ''}`} />);
-  const gj = (n: number, who: number) =>
-    comp && n > 0 ? (
-      <span className="gj" title={`${n} gam-jeom`} data-testid={`gj-${who}`}>
+  // Round gam-jeom; the match total (Art. 14 limit of 10) appears once it differs.
+  const gj = (who: 0 | 1) => {
+    const n = hud.gamjeom[who];
+    const m = hud.gamjeomMatch[who];
+    return comp && m > 0 ? (
+      <span className="gj" title={`${n} gam-jeom this round · ${m} in the match`} data-testid={`gj-${who}`}>
         GJ{n}
+        {m > n ? <small>/{m}</small> : null}
       </span>
     ) : null;
+  };
   const status = [hud.lead ? 'LEAD' : hud.high ? 'HEAD' : 'BODY', hud.stance === 'orthodox' ? 'ORTH' : 'SOUTH', hud.lockOn ? 'LOCK' : 'FREE'];
   return (
     <div className={`hud ${comp ? 'comp' : ''}`} data-testid="hud">
@@ -38,7 +43,7 @@ export function Hud() {
             <span className="full">{hud.names[0]}</span>
             <span className="short">{hud.shortNames[0]}</span>
             <span className="pips">{pips(hud.wins[0])}</span>
-            {gj(hud.gamjeom[0], 0)}
+            {gj(0)}
           </div>
           {!comp && <Bar value={hud.health[0]} max={hud.maxHealth[0]} cls="hp" />}
           <Bar value={hud.stamina[0]} max={100} cls="st" />
@@ -50,7 +55,7 @@ export function Hud() {
         )}
         <div className="clock" data-testid="clock">
           <span className="row">
-            <span className="round">{hud.round > hud.roundsToWin * 2 - 1 ? 'GOLD' : `R${hud.round}`}</span>
+            <span className="round">R{hud.round}</span>
             <span className="time">{hud.seconds}</span>
           </span>
           <span className="status" data-testid="status">
@@ -64,7 +69,7 @@ export function Hud() {
         )}
         <div className="side right">
           <div className="name right">
-            {gj(hud.gamjeom[1], 1)}
+            {gj(1)}
             <span className="pips">{pips(hud.wins[1])}</span>
             <span className="full">{hud.names[1]}</span>
             <span className="short">{hud.shortNames[1]}</span>

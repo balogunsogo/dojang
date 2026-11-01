@@ -38,7 +38,8 @@ export interface ContactVerdict {
   turning: boolean;
 }
 
-export type RoundEndReason = 'ko' | 'time' | 'gap' | 'penalties' | 'superiority' | 'golden';
+/** 'decision' = game-specific superiority fallback (not a WT referee decision). */
+export type RoundEndReason = 'ko' | 'time' | 'gap' | 'penalties' | 'superiority' | 'decision';
 
 export interface RoundDecision {
   winner: 0 | 1 | null;
@@ -69,7 +70,7 @@ export interface RuleHooks {
   decideRound(world: CombatWorld): RoundDecision;
   /** After a round ends: is the match over, and who won? */
   matchResult(world: CombatWorld): { over: boolean; winner: 0 | 1 | null };
-  /** Length of the next round in seconds (a golden round can be shorter). */
+  /** Length of the next round in seconds. */
   roundLength(world: CombatWorld): number;
 }
 

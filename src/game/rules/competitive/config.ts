@@ -3,19 +3,23 @@
  * values can be corrected without touching game logic.
  *
  * Reference edition: World Taekwondo "Competition Rules & Interpretation",
- * in force as of June 1, 2026. The official PDF could not be opened from the
- * build environment (network policy), so the values below were taken from
- * search excerpts of that document and national-federation bulletins
- * summarising the 2026 changes. Each value notes its confidence; see
- * docs/PHASE_2.md "Rules sources". Items marked UNVERIFIED need checking
- * against the official text before any claim of fidelity.
+ * in force as of June 1, 2026. Article references below follow the product
+ * owner's review of that edition (Phase 2 review of PR #3). The build
+ * environment still cannot open the PDF itself (network policy), so items
+ * not covered by that review are marked in docs/PHASE_2.md "Rules sources".
  */
+
+/** Selectable round lengths (s). 120 s is the WT senior standard. */
+export const ROUND_DURATIONS = [60, 90, 120] as const;
+export type RoundDuration = (typeof ROUND_DURATIONS)[number];
+export const SENIOR_ROUND_SECONDS: RoundDuration = 120;
 export interface CompetitiveConfig {
   edition: string;
-  /** Round length (s). WT seniors: 2:00. Shortened for game pacing (see DECISIONS D-016). */
-  roundSeconds: number;
-  /** Golden round length (s) if the match is level after three rounds. */
-  goldenRoundSeconds: number;
+  /**
+   * Round length (s): 60, 90 or 120. 120 s (2:00) is the WT senior standard;
+   * 90 s is the approved gameplay default (DECISIONS D-016).
+   */
+  roundSeconds: RoundDuration;
   roundsToWin: number;
   points: {
     punchTrunk: number;
@@ -32,8 +36,10 @@ export interface CompetitiveConfig {
   passiveLateWindowSeconds: number;
   /** Round ends when the score difference reaches this (0 disables). */
   pointGap: number;
-  /** Round is lost on reaching this many gam-jeom in one round (0 disables). UNVERIFIED. */
+  /** Best of three: this many gam-jeom in one round lose that round (Art. 14; 0 disables). */
   gamjeomRoundLimit: number;
+  /** Cumulative gam-jeom across the match that lose the match (Art. 14; 0 disables). */
+  gamjeomMatchLimit: number;
   /** Boundary line: half-size of the competition area (m). */
   boundary: number;
   /** How far the foot extends past the body centre (m): "any part of the foot crosses". */
@@ -55,7 +61,6 @@ export interface CompetitiveConfig {
 export const WT_2026: CompetitiveConfig = {
   edition: 'World Taekwondo Competition Rules & Interpretation (in force June 1, 2026) — game adaptation',
   roundSeconds: 90,
-  goldenRoundSeconds: 60,
   roundsToWin: 2,
   // Verified in search excerpts of the June 2026 edition: turning kicks score
   // double their base value (trunk 4, head 6).
@@ -68,8 +73,10 @@ export const WT_2026: CompetitiveConfig = {
   passiveLateWindowSeconds: 10,
   // April 2026 General Assembly (effective June 2026): point gap raised 12 → 15.
   pointGap: 15,
-  // UNVERIFIED: sources disagree (5 per round vs. 10 per match). 5 per round chosen.
+  // Approved in the Phase 2 review (Art. 14): 5 in a round lose the round in
+  // best of three; 10 cumulative in the match lose the match.
   gamjeomRoundLimit: 5,
+  gamjeomMatchLimit: 10,
   boundary: 4.0,
   footExtent: 0.14,
   minTrunkExtension: 0.45,
