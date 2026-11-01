@@ -11,6 +11,8 @@ export type CharacterId = 'jae' | 'hana';
 export interface CharacterDef {
   id: CharacterId;
   name: string;
+  /** Short HUD label. */
+  short: string;
   hangul: string;
   blurb: string;
   scale: number;
@@ -23,6 +25,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   jae: {
     id: 'jae',
     name: 'Kim Jae-won',
+    short: 'Jae',
     hangul: '김재원',
     blurb: 'Powerful and patient. Heavier kicks, steady stamina.',
     scale: 1.0,
@@ -33,6 +36,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   hana: {
     id: 'hana',
     name: 'Park Ha-na',
+    short: 'Ha-na',
     hangul: '박하나',
     blurb: 'Fast footwork and quick recovery. Lighter strikes.',
     scale: 0.95,

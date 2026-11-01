@@ -171,12 +171,32 @@ function ankleFor(impact: V3, back: number, drop = 0): V3 {
   return [impact[0], impact[1] - drop, impact[2] - back];
 }
 
+export type AttackOutcome = 'pending' | 'hit' | 'blocked' | 'whiff';
+
+/** Deterministic small jitter so repeated techniques never look identical. */
+function jitter(seed: number) {
+  let x = (seed * 2654435761) >>> 0 || 1;
+  return (amp: number) => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return (((x >>> 0) / 4294967296) * 2 - 1) * amp;
+  };
+}
+
+/** Landing settle: weight drops into the stance, then recovers. */
+const settle = (yaw = STANCE.yaw) => pose(STANCE, { yaw, hips: v(0, 0.835, -0.02), pitch: 7 });
+
 /**
  * Build the keyframes for a technique. Key times are placed relative to the
  * attack's actual startup/active/recovery ticks, so the visual extension is
- * synchronized with the active hit window.
+ * synchronized with the active hit window. Only the recovery shape depends on
+ * the outcome (landed, blocked, missed); timing never changes.
+ *
+ * Phases: anticipation (weight onto the support leg, heel lifts) → chamber →
+ * snap extension → outcome-specific retraction → landing settle → stance.
  */
-export function attackKeys(atk: AttackState): Key[] {
+export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending', seed = 0): Key[] {
   const S = atk.startup;
   const A = atk.move.active;
   const T = atk.total;
@@ -186,6 +206,42 @@ export function attackKeys(atk: AttackState): Key[] {
   const r = (f: number) => S + A + R * f;
   const head = atk.height === 'head';
   const imp = atk.impact;
+  const j = jitter(seed + 1);
+
+  // Anticipation: shift weight onto the lead (support) leg, rear heel rises.
+  const load = pose(STANCE, {
+    hips: v(0.035, 0.85, 0.0),
+    yaw: STANCE.yaw + 4,
+    pitch: STANCE.pitch + 2,
+    rLeg: { p: v(-0.16, ANKLE_H + 0.035, -0.28), point: 0.45 },
+  });
+
+  /** Shared recovery builder: crisp retract after a hit, rebound after a block, follow-through after a whiff. */
+  const recover = (chamber: Pose, extend: Pose, follow: Pose, endYaw = STANCE.yaw): Key[] => {
+    const end = pose(STANCE, { yaw: endYaw });
+    switch (outcome) {
+      case 'blocked':
+        return [
+          { t: r(0.14), pose: pose(chamber, { hips: [chamber.hips[0], chamber.hips[1], chamber.hips[2] - 0.07], pitch: chamber.pitch - 8 }), ease: 'snap' },
+          { t: r(0.58), pose: settle(endYaw) },
+          { t: T, pose: end },
+        ];
+      case 'whiff':
+        return [
+          { t: r(0.3), pose: follow },
+          { t: r(0.62), pose: pose(chamber, { pitch: chamber.pitch + 4 }) },
+          { t: r(0.88), pose: settle(endYaw) },
+          { t: T, pose: end },
+        ];
+      default:
+        return [
+          { t: r(0.1), pose: extend },
+          { t: r(0.36), pose: chamber },
+          { t: r(0.72), pose: settle(endYaw) },
+          { t: T, pose: end },
+        ];
+    }
+  };
 
   switch (atk.move.id) {
     case 'punch': {
@@ -194,54 +250,55 @@ export function attackKeys(atk: AttackState): Key[] {
         twist: 18,
         pitch: 9,
         hips: v(0, 0.86, 0.06),
-        rLeg: { yaw: -40, pole: dirYaw(-30) },
+        rLeg: { yaw: -40, pole: dirYaw(-30), point: 0.3 },
         rArm: { p: [imp[0], imp[1], imp[2] - 0.04], pole: v(-0.3, -1, -0.6), world: 1 },
         lArm: { p: v(0.06, 0.2, 0.2), pole: v(0.6, -1, -0.2) },
       });
-      return [
-        { t: 0, pose: STANCE },
-        { t: s(0.5), pose: pose(STANCE, { yaw: -48, rArm: { p: v(-0.1, 0.12, 0.16) } }) },
-        { t: a(0.4), pose: extend, ease: 'snap' },
-        { t: a(1), pose: extend },
-        { t: r(0.6), pose: STANCE },
-        { t: T, pose: STANCE },
-      ];
+      const cock = pose(STANCE, { yaw: -50, hips: v(0.02, 0.855, -0.03), rArm: { p: v(-0.1, 0.12, 0.14) } });
+      const over = pose(extend, { pitch: 16, hips: v(0, 0.85, 0.12), twist: 24 });
+      const back: Key[] =
+        outcome === 'whiff'
+          ? [{ t: r(0.3), pose: over }, { t: r(0.75), pose: settle() }, { t: T, pose: STANCE }]
+          : [{ t: r(0.45), pose: pose(STANCE, { twist: 12 }) }, { t: T, pose: STANCE }];
+      return [{ t: 0, pose: STANCE }, { t: s(0.5), pose: cock }, { t: a(0.4), pose: extend, ease: 'snap' }, { t: a(1), pose: extend }, ...back];
     }
     case 'front': {
       const chamber = pose(STANCE, {
-        hips: v(0, 0.89, 0.04),
-        yaw: -18,
-        pitch: -4,
+        hips: v(0, 0.89 + j(0.01), 0.04),
+        yaw: -18 + j(5),
+        pitch: -4 + j(2),
         twist: 6,
-        lLeg: { yaw: -30, pole: dirYaw(-20) },
-        rLeg: { p: v(-0.08, head ? 0.74 : 0.62, 0.26), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
-        rArm: { p: v(-0.16, 0.1, 0.14) },
+        lLeg: { yaw: -30, pole: dirYaw(-20), point: 0.15 },
+        rLeg: { p: v(-0.08, (head ? 0.74 : 0.62) + j(0.03), 0.26), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
+        rArm: { p: v(-0.16 + j(0.02), 0.1, 0.14) },
       });
       const extend = pose(chamber, {
         hips: v(0, 0.91, 0.1),
         pitch: head ? -16 : -11,
+        lLeg: { point: 0.3 },
         rLeg: { p: ankleFor(imp, 0.11, 0.02), pole: v(0, 1, 0.3), point: 0.95 },
         rArm: { p: v(-0.22, 0.02, 0.0), pole: v(-0.8, -1, 0) },
       });
+      // Missed: the leg drops forward and the body is carried over the lead foot.
+      const follow = pose(extend, { pitch: 2, hips: v(0, 0.88, 0.16), rLeg: { p: v(-0.06, 0.5, imp[2] - 0.1), pole: v(0, 0.4, 1), point: 0.6 } });
       return [
         { t: 0, pose: STANCE },
-        { t: s(0.65), pose: chamber },
+        { t: s(0.28), pose: load },
+        { t: s(0.68), pose: chamber },
         { t: a(0.5), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
-        { t: r(0.35), pose: chamber },
-        { t: r(0.8), pose: STANCE },
-        { t: T, pose: STANCE },
+        ...recover(chamber, extend, follow),
       ];
     }
     case 'round': {
       const chamber = pose(STANCE, {
-        hips: v(0, 0.9, 0.04),
-        yaw: 20,
-        pitch: -2,
-        roll: -8,
+        hips: v(0, 0.9 + j(0.01), 0.04),
+        yaw: 20 + j(6),
+        pitch: -2 + j(2),
+        roll: -8 + j(3),
         twist: -10,
-        lLeg: { yaw: 55, pole: dirYaw(45) },
-        rLeg: { p: v(-0.4, head ? 1.08 : 0.92, 0.22), pole: v(0.0, 0.3, 1), point: 0.8, yaw: 0 },
+        lLeg: { yaw: 55, pole: dirYaw(45), point: 0.2 },
+        rLeg: { p: v(-0.4, (head ? 1.08 : 0.92) + j(0.03), 0.22), pole: v(0.0, 0.3, 1), point: 0.8, yaw: 0 },
         rArm: { p: v(-0.2, 0.06, 0.1) },
       });
       const extend = pose(chamber, {
@@ -251,36 +308,43 @@ export function attackKeys(atk: AttackState): Key[] {
         roll: head ? -30 : -24,
         twist: -24,
         head: 0,
-        lLeg: { yaw: 105, pole: dirYaw(95) },
+        lLeg: { yaw: 105, pole: dirYaw(95), point: 0.35 },
         rLeg: { p: ankleFor(imp, 0.1, 0.0), pole: v(0.7, 0.7, 0), point: 1 },
         lArm: { p: v(0.18, 0.12, 0.26) },
         rArm: { p: v(-0.3, -0.05, -0.1), pole: v(-1, -0.5, 0) },
       });
+      // Missed: the kick sweeps on across the body and the hips over-rotate.
+      const follow = pose(extend, {
+        yaw: 118,
+        roll: -14,
+        twist: -30,
+        lLeg: { yaw: 140, pole: dirYaw(130) },
+        rLeg: { p: v(0.3, imp[1] - 0.25, imp[2] - 0.3), pole: v(0.6, 0.8, 0), point: 0.9 },
+      });
       return [
         { t: 0, pose: STANCE },
+        { t: s(0.25), pose: load },
         { t: s(0.7), pose: chamber },
         { t: a(0.5), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
-        { t: r(0.35), pose: pose(chamber, { yaw: 40 }) },
-        { t: r(0.85), pose: STANCE },
-        { t: T, pose: STANCE },
+        ...recover(pose(chamber, { yaw: 40 }), extend, follow),
       ];
     }
     case 'side': {
       const pivot = pose(STANCE, {
         yaw: 30,
-        hips: v(0, 0.87, 0.0),
-        lLeg: { yaw: 70, pole: dirYaw(60) },
+        hips: v(0.02, 0.86, 0.0),
+        lLeg: { yaw: 70, pole: dirYaw(60), point: 0.2 },
         rLeg: { p: v(-0.1, 0.3, -0.05), pole: v(0, 0.6, 1), point: 0.3 },
       });
       const chamber = pose(STANCE, {
-        hips: v(0.02, 0.89, 0.0),
-        yaw: 72,
+        hips: v(0.02, 0.89 + j(0.01), 0.0),
+        yaw: 72 + j(4),
         pitch: 0,
-        roll: -12,
+        roll: -12 + j(3),
         twist: -18,
-        lLeg: { yaw: 120, pole: dirYaw(110) },
-        rLeg: { p: v(-0.02, head ? 0.92 : 0.8, 0.08), pole: v(0.6, 0.6, 0.6), point: 0.25, yaw: 90 },
+        lLeg: { yaw: 120, pole: dirYaw(110), point: 0.15 },
+        rLeg: { p: v(-0.02, (head ? 0.92 : 0.8) + j(0.03), 0.08), pole: v(0.6, 0.6, 0.6), point: 0.25, yaw: 90 },
         lArm: { p: v(0.18, 0.12, 0.26) },
         rArm: { p: v(-0.04, 0.2, 0.2) },
       });
@@ -288,37 +352,37 @@ export function attackKeys(atk: AttackState): Key[] {
         hips: v(0.1, 0.9, 0.12),
         yaw: 88,
         roll: head ? -42 : -34,
-        lLeg: { p: v(0.08, ANKLE_H, 0.22), yaw: 150, pole: dirYaw(130) },
+        lLeg: { p: v(0.08, ANKLE_H, 0.22), yaw: 150, pole: dirYaw(130), point: 0.25 },
         rLeg: { p: ankleFor(imp, 0.04, 0.03), pole: v(1, 0.15, 0), point: 0.25 },
         rArm: { p: v(-0.1, -0.12, 0.05), pole: v(-1, -0.5, 0) },
       });
+      // Missed: over-commits forward, support leg hops after the kick.
+      const follow = pose(extend, { hips: v(0.12, 0.88, 0.2), roll: -26, rLeg: { p: v(-0.02, imp[1] - 0.3, imp[2] - 0.15) } });
       return [
         { t: 0, pose: STANCE },
         { t: s(0.35), pose: pivot },
         { t: s(0.8), pose: chamber },
         { t: a(0.6), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
-        { t: r(0.35), pose: chamber },
-        { t: r(0.85), pose: STANCE },
-        { t: T, pose: STANCE },
+        ...recover(chamber, extend, follow),
       ];
     }
     case 'back': {
       // Spin clockwise (seen from above), kick straight back, finish the turn.
       const turn = pose(STANCE, {
         yaw: -120,
-        hips: v(0, 0.87, 0.0),
+        hips: v(0, 0.86, 0.0),
         look: 0.6,
-        lLeg: { yaw: -150, pole: dirYaw(-150) },
+        lLeg: { yaw: -150, pole: dirYaw(-150), point: 0.25 },
         rLeg: { p: v(-0.08, 0.2, -0.12), pole: v(0, 0.5, -1), point: 0.3 },
       });
       const chamber = pose(STANCE, {
-        yaw: -178,
-        pitch: 18,
+        yaw: -178 + j(4),
+        pitch: 18 + j(3),
         hips: v(0, 0.88, 0.02),
         look: 0.75,
-        lLeg: { p: v(0.02, ANKLE_H, 0.2), yaw: -185, pole: dirYaw(-185) },
-        rLeg: { p: v(-0.02, 0.6, 0.02), pole: v(0, 0.3, -1), point: 0.2, yaw: 180 },
+        lLeg: { p: v(0.02, ANKLE_H, 0.2), yaw: -185, pole: dirYaw(-185), point: 0.15 },
+        rLeg: { p: v(-0.02, 0.6 + j(0.03), 0.02), pole: v(0, 0.3, -1), point: 0.2, yaw: 180 },
         lArm: { p: v(0.16, 0.14, 0.24) },
         rArm: { p: v(-0.16, 0.1, 0.2) },
       });
@@ -327,16 +391,81 @@ export function attackKeys(atk: AttackState): Key[] {
         hips: v(0, 0.9, 0.06),
         rLeg: { p: ankleFor(imp, 0.02, -0.06), pole: v(0, -1, -0.4), point: 0.05 },
       });
+      const rechamber = pose(chamber, { yaw: -230, pitch: 8 });
+      const follow = pose(extend, { yaw: -205, pitch: 26, hips: v(0, 0.88, 0.12) });
+      // The spin always completes; the recovery ends a full turn later (-360°).
       return [
         { t: 0, pose: STANCE },
-        { t: s(0.4), pose: turn },
+        { t: s(0.18), pose: pose(load, { yaw: STANCE.yaw - 10 }) },
+        { t: s(0.45), pose: turn },
         { t: s(0.85), pose: chamber },
         { t: a(0.6), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
-        { t: r(0.35), pose: pose(chamber, { yaw: -230, pitch: 8 }) },
-        { t: r(0.85), pose: pose(STANCE, { yaw: -400 }) },
-        { t: T, pose: pose(STANCE, { yaw: -402 }) },
+        ...recover(rechamber, extend, follow, STANCE.yaw - 360),
       ];
     }
   }
+}
+
+/**
+ * Impulse envelope for reactions: fast rise (about 3 ticks), then an eased
+ * decay over the stun. Returns 0..1.
+ */
+export function reactionEnvelope(t: number, stun: number): number {
+  const rise = 3;
+  if (t <= 0) return 0;
+  if (t < rise) return smoothstep(t / rise);
+  const k = clamp((t - rise) / Math.max(1, stun - rise), 0, 1);
+  return 1 - smoothstep(k);
+}
+
+export interface ReactionInfo {
+  zone: 'body' | 'head';
+  heavy: boolean;
+  /** +1 from the defender's left, -1 from the right, 0 straight on. */
+  side: number;
+}
+
+/**
+ * Procedural hit reaction layered on the fighting stance (orthodox frame):
+ * body shots fold the trunk and drive the hips back; head shots snap the head
+ * and torso away from the strike. The guard is disturbed but kept, so the
+ * fighter reads as a fighter rather than a ragdoll.
+ */
+export function hitPose(base: Pose, r: ReactionInfo, e: number): Pose {
+  const k = e * (r.heavy ? 1.45 : 1);
+  const sd = r.side;
+  if (r.zone === 'body') {
+    return pose(base, {
+      hips: v(base.hips[0] - sd * 0.03 * k, base.hips[1] - 0.05 * k, base.hips[2] - 0.09 * k),
+      pitch: base.pitch + 20 * k,
+      roll: base.roll + sd * 6 * k,
+      twist: base.twist - sd * 10 * k,
+      head: base.head + sd * 8 * k,
+      lArm: { p: v(base.lArm.p[0] - 0.04 * k, base.lArm.p[1] - 0.12 * k, base.lArm.p[2] - 0.08 * k) },
+      rArm: { p: v(base.rArm.p[0] + 0.04 * k, base.rArm.p[1] - 0.1 * k, base.rArm.p[2] - 0.06 * k) },
+    });
+  }
+  return pose(base, {
+    hips: v(base.hips[0] - sd * 0.04 * k, base.hips[1] - 0.03 * k, base.hips[2] - 0.07 * k),
+    pitch: base.pitch - 16 * k,
+    roll: base.roll + sd * 10 * k,
+    twist: base.twist - sd * 18 * k,
+    head: base.head - sd * 28 * k,
+    look: base.look * (1 - 0.6 * k),
+    lArm: { p: v(base.lArm.p[0] + 0.05 * k, base.lArm.p[1] + 0.06 * k, base.lArm.p[2] - 0.1 * k) },
+    rArm: { p: v(base.rArm.p[0] - 0.05 * k, base.rArm.p[1] + 0.05 * k, base.rArm.p[2] - 0.1 * k) },
+  });
+}
+
+/** Blocked strike: forearms driven back into the guard, torso absorbs it. */
+export function blockPose(base: Pose, r: ReactionInfo | null, e: number): Pose {
+  const sd = r?.side ?? 0;
+  return pose(base, {
+    hips: v(base.hips[0], base.hips[1] - 0.025 * e, base.hips[2] - 0.06 * e),
+    pitch: base.pitch - 9 * e,
+    twist: base.twist - sd * 9 * e,
+    lArm: { p: v(base.lArm.p[0] - 0.02 * e, base.lArm.p[1] + 0.02 * e, base.lArm.p[2] - 0.07 * e) },
+    rArm: { p: v(base.rArm.p[0] + 0.02 * e, base.rArm.p[1] + 0.02 * e, base.rArm.p[2] - 0.06 * e) },
+  });
 }

@@ -33,6 +33,18 @@ Status key: ✅ done · 🟡 partial · ⬜ not started
 
 **Gate passed:** a full sparring exchange is playable on desktop (keyboard) and touch (emulated mobile viewport with multitouch). It hasn't been tried on a physical device yet; see HANDOFF.md.
 
+## Phase 1.5: Combat animation and mobile UX refinement ✅
+
+Requested after desktop and physical-iPhone UAT. Details and measurements are in PHASE_1_5.md.
+
+- ✅ Foot planting, stance life (breathing, weight shift, varied bounce), acceleration lean
+- ✅ Anticipation, support-foot pivot, landing settle; outcome-aware recovery; seeded variation
+- ✅ Procedural hit and block reactions; time-based cross-fades; jump stance switch
+- ✅ Compact touch scheme (Kick + persistent technique wheel, head ring and chip, Guard/Dash/Punch/switch); Classic refined
+- ✅ Slim HUD, consolidated status, translucent controls, safe areas, aspect-ratio breakpoints, UI-aware camera framing
+- ✅ Optional PWA (manifest, icons, iOS hint, Android install button)
+- ⬜ Real-device validation of feel, reach and safe areas (UAT)
+
 ## Phase 2: Combat and match systems ⬜
 
 1. Competitive ruleset (`rules/CompetitiveRules.ts`): check the WT point values first; implement the scoring table, gam-jeom for leaving the mat and stalling, and a round decision. Add a ruleset picker in the menu.

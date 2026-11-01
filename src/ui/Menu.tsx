@@ -3,6 +3,7 @@ import type { Difficulty } from '../game/ai/AIController';
 import { audio } from '../game/audio/AudioEngine';
 import { isTouchDevice, type QualitySetting } from '../game/render/quality';
 import { useGameStore } from '../store/useGameStore';
+import { PwaHint } from './PwaHint';
 
 const DIFFS: { id: Difficulty; label: string; note: string }[] = [
   { id: 'easy', label: 'White belt', note: 'Slow reactions, rarely guards' },
@@ -32,6 +33,7 @@ export function Menu() {
           DOJANG <span className="hangul">도장</span>
         </h1>
         <p className="tag">Taekwondo sparring</p>
+        <PwaHint />
         {panel === 'main' && (
           <>
             <section>
@@ -68,11 +70,16 @@ export function Menu() {
               <li>Hold <kbd>E</kbd> to aim kicks at the head · hold <kbd>Space</kbd> to guard</li>
               <li><kbd>Q</kbd> switch stance · <kbd>Tab</kbd> lock-on · mouse drag / wheel camera · <kbd>Esc</kbd> pause</li>
             </ul>
-            <h3>Touch</h3>
+            <h3>Touch — Compact (default)</h3>
             <ul>
-              <li>Left thumb anywhere on the left half: floating joystick</li>
-              <li>Right cluster: techniques, hold Guard, Dash, Head/Body toggle</li>
-              <li>Drag on empty space on the right to orbit the camera</li>
+              <li>Left thumb anywhere on the left side: floating joystick</li>
+              <li><b>Kick</b>: tap to throw the selected kick. Slide from it (or hold) to open the wheel, release on Front / Round / Side / Back to switch and throw. Slide past the outer ring for a head kick.</li>
+              <li>Hold <b>Guard</b> · <b>Dash</b> · <b>Punch</b> · <b>⇄</b> switch stance · <b>Body/Head</b> chip sets the default height</li>
+              <li>Drag anywhere else to orbit the camera</li>
+            </ul>
+            <h3>Touch — Classic</h3>
+            <ul>
+              <li>One button per technique, plus Guard, Dash, Body/Head and ⇄ (switch it in Settings)</li>
             </ul>
             <h3>Gamepad</h3>
             <ul>
@@ -101,9 +108,15 @@ export function Menu() {
               <input type="checkbox" checked={settings.showPerf} onChange={(e) => update({ showPerf: e.target.checked })} /> Performance overlay
             </label>
             <label>
+              Touch controls
+              <select value={settings.controlScheme} onChange={(e) => update({ controlScheme: e.target.value as 'compact' | 'classic' })} data-testid="scheme-select">
+                <option value="compact">Compact — Kick button + technique wheel (recommended)</option>
+                <option value="classic">Classic — one button per technique</option>
+              </select>
+            </label>
+            <label>
               <input type="checkbox" checked={settings.forceTouch} onChange={(e) => update({ forceTouch: e.target.checked })} /> Always show touch controls
             </label>
-            <p className="muted">Touch control mode: Classic buttons. Hybrid gestures arrive in Phase 3.</p>
             <button onClick={() => setPanel('main')}>Back</button>
           </section>
         )}

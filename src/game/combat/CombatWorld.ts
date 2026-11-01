@@ -177,6 +177,11 @@ export class CombatWorld {
     const move = atk.move;
     const fx = Math.sin(att.yaw);
     const fz = Math.cos(att.yaw);
+    // Side the technique arrives from, as seen by the defender (presentation only):
+    // an orthodox rear-leg roundhouse sweeps in from the attacker's right,
+    // which is the defender's left.
+    const side = move.id === 'round' ? att.mirror : 0;
+    const react = (heavy: boolean) => ({ zone, heavy, fromYaw: att.yaw, kind: move.id, side });
     const blocking = def.isGuarding && inGuardArc(def.yaw, def.x, def.z, att.x, att.z);
     if (blocking) {
       const cost = move.stamina * 0.8;
@@ -186,7 +191,7 @@ export class CombatWorld {
       this.events.push({ type: 'block', attacker: att.id, defender: def.id, move, point, guardBreak });
       if (guardBreak) {
         const out = this.rules.scoreHit({ attacker: att, defender: def, move, zone, counter: false, tired: true });
-        def.receiveHit(GUARD_BREAK_STUN, fx * move.pushback, fz * move.pushback, { zone, heavy: true, fromYaw: att.yaw });
+        def.receiveHit(GUARD_BREAK_STUN, fx * move.pushback, fz * move.pushback, react(true));
         this.damage(def, Math.round(out.damage * 0.5));
         this.hitstop = HITSTOP_HIT;
       } else {
@@ -194,7 +199,7 @@ export class CombatWorld {
           const out = this.rules.scoreHit({ attacker: att, defender: def, move, zone, counter: false, tired: atk.tired });
           this.damage(def, Math.round(out.damage * CHIP_FRACTION));
         }
-        def.receiveBlock(move.blockstun, fx * move.pushback * 0.6, fz * move.pushback * 0.6);
+        def.receiveBlock(move.blockstun, fx * move.pushback * 0.6, fz * move.pushback * 0.6, react(false));
         this.hitstop = HITSTOP_BLOCK;
       }
       return;
@@ -203,7 +208,7 @@ export class CombatWorld {
     const out = this.rules.scoreHit({ attacker: att, defender: def, move, zone, counter, tired: atk.tired });
     this.points[att.id] += out.points;
     const heavy = move.pushback > 3 || zone === 'head' || counter;
-    def.receiveHit(move.hitstun, fx * move.pushback, fz * move.pushback, { zone, heavy, fromYaw: att.yaw });
+    def.receiveHit(move.hitstun, fx * move.pushback, fz * move.pushback, react(heavy));
     // Damage after the reaction so a knockout state is not overwritten by hitstun.
     if (this.rules.usesHealth) this.damage(def, out.damage);
     this.hitstop = HITSTOP_HIT;

@@ -101,6 +101,13 @@ Planned simplifications, to be documented in game: no electronic-sensor force th
 
 Local belt milestones: white → yellow → green. Each belt is unlocked by specific training challenges and saved locally. This is a game progression model, not an official grading. The belt color already renders on the fighter's dobok.
 
+## Touch controls
+
+- **Compact (default):** joystick, a Kick button that repeats the selected kick, and a technique wheel opened by sliding from Kick (or holding it). Slide past the outer ring for head height. Plus Guard, Dash, Punch, switch stance and a Body/Head chip.
+- **Classic:** one button per technique.
+
+See PHASE_1_5.md.
+
 ## Presentation
 
 Match calls use Korean referee commands: *Joon-bi* (ready), *Shi-jak* (begin), *Keu-man* (stop). Competition corners are chung (blue) and hong (red), shown on the trunk protector and headgear. The dojang has the taegeukgi, a 跆拳道 calligraphy banner with the five tenets (예의 · 염치 · 인내 · 극기 · 백절불굴), a dancheong frieze, changsal lattice windows, a belt rack, a mirror wall and heavy bags.

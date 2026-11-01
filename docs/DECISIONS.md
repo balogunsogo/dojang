@@ -45,3 +45,25 @@
 ## D-009 — TypeScript 5.9 rather than 7.x
 
 TypeScript 7 (the native compiler) was the newest release, but 5.9 was chosen for proven compatibility with the Vite and Vitest type-checking toolchain. Revisit later.
+
+## D-010 — Keep the CC0 rig in Phase 1.5; fix how it is driven
+
+**Context.** UAT found the fighters robotic. Options: replace the rig and model, or improve the animation driving it.
+**Decision.** Keep the rig. The stiffness came from sliding feet, a fixed loop, missing weight transfer, identical recoveries and generic hit clips. All of those are animation-layer problems. No licensed Taekwondo-specific replacement was reachable, and a new rig would mean re-authoring every technique.
+**Consequences.** Foot planting, stance life, outcome-aware recovery, variation and procedural reactions were added (PHASE_1_5.md). A higher-fidelity model on the same skeleton is still possible later.
+
+## D-011 — Procedural hit reactions replace the CC0 hit clips
+
+The `Hit_Chest` and `Hit_Head` clips dropped the guard and reset the feet. Reactions are now procedural layers on the fighting stance, directional and scaled by technique. The clips stay in `fighter.glb` (about 20 KB) but are unused. The knockdown (`Death01`) and victory idle (`Idle_Loop`) clips are still used.
+
+## D-012 — Compact touch scheme as the default
+
+One persistent-selection Kick button with a technique wheel replaces five technique buttons on screen. This frees the screen (UI coverage 25–32% → 14–18%) while keeping every technique one gesture away. Classic remains selectable. Head height comes from a gesture (slide past the outer ring) or the Body/Head chip.
+
+## D-013 — Optional PWA, no service worker
+
+A web manifest and Apple standalone tags let players launch fullscreen from the home screen. Installing is optional. No service worker: offline play isn't a requirement, and caching would complicate deployments.
+
+## D-014 — UI-aware camera framing
+
+The camera fits both fighters into the screen region not covered by the HUD and controls (field-of-view math) and shifts the projection with `setViewOffset`, instead of using a fixed distance formula.

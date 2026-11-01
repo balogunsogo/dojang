@@ -22,6 +22,14 @@ export class CameraRig {
   private readonly pos = new THREE.Vector3();
   private shake = 0;
   private initialized = false;
+  /**
+   * Screen fractions covered by UI (HUD at the top, controls at the bottom).
+   * Framing keeps both fighters inside the remaining region.
+   */
+  readonly safe = { top: 0.08, bottom: 0, widthFraction: 0.72 };
+  private viewY = 0;
+  private viewW = 0;
+  private viewH = 0;
 
   addShake(amount: number) {
     this.shake = Math.min(0.12, this.shake + amount);
@@ -39,7 +47,7 @@ export class CameraRig {
     return this.yaw;
   }
 
-  update(cam: THREE.PerspectiveCamera, dt: number, px: number, pz: number, ox: number, oz: number) {
+  update(cam: THREE.PerspectiveCamera, dt: number, px: number, pz: number, ox: number, oz: number, vw = 0, vh = 0) {
     this.idle += dt;
     const ux = ox - px;
     const uz = oz - pz;
@@ -53,7 +61,7 @@ export class CameraRig {
     if (this.lockOn) {
       fx = (px + ox) / 2;
       fz = (pz + oz) / 2;
-      dist = clamp(2.9 + sep * 0.85, 3.4, 7.5) + this.zoom;
+      dist = this.fitDistance(cam, sep) + this.zoom;
       // Desired view: camera right ≈ player->opponent, nudged behind the player.
       const k = Math.sin(0.42);
       const c = Math.cos(0.42);
@@ -94,5 +102,32 @@ export class CameraRig {
       this.shake *= Math.exp(-dt * 14);
     }
     cam.lookAt(this.focus);
+    this.applyViewOffset(cam, vw, vh);
+  }
+
+  /**
+   * Distance at which both fighters (plus kick reach) fit the unobstructed
+   * width, and a full standing fighter fits the unobstructed height.
+   */
+  private fitDistance(cam: THREE.PerspectiveCamera, sep: number): number {
+    const vfov = (cam.fov * Math.PI) / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * cam.aspect);
+    const usableH = clamp(1 - this.safe.top - this.safe.bottom * 0.55, 0.45, 1);
+    const extent = sep + 1.5; // both bodies plus a leg's reach either side
+    const dW = extent / 2 / Math.tan((hfov * this.safe.widthFraction) / 2);
+    const dH = 2.1 / 2 / Math.tan((vfov * usableH) / 2);
+    return clamp(Math.max(dW, dH), 3.2, 9);
+  }
+
+  /** Shift the projection so the focus sits in the middle of the unobstructed region. */
+  private applyViewOffset(cam: THREE.PerspectiveCamera, vw: number, vh: number) {
+    if (!vw || !vh) return;
+    const shift = Math.round(((this.safe.bottom * 0.55 - this.safe.top) / 2) * vh);
+    if (shift === this.viewY && vw === this.viewW && vh === this.viewH) return;
+    this.viewY = shift;
+    this.viewW = vw;
+    this.viewH = vh;
+    if (shift === 0) cam.clearViewOffset();
+    else cam.setViewOffset(vw, vh, 0, shift, vw, vh);
   }
 }

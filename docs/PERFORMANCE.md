@@ -48,6 +48,10 @@ Open the perf overlay with `` ` ``, Settings › Performance overlay, or `?perf=
 | Total initial download | ≈ 0.45–0.56 MB | ≤ 1.5 MB ✅ |
 | FPS under SwiftShader | 6–21 FPS | **not representative** |
 
+## Phase 1.5 before/after
+
+See PHASE_1_5.md § D. In the same environment: draw calls 20–23 → 19–21, animation CPU 0.32–0.43 → 0.37–0.48 ms per frame for both fighters, no new textures, shaders or materials. Phone UI coverage went from 25–32% to 14–18% of the screen.
+
 ## Not yet verified
 
 - **No real-device testing has been done.** Nothing has run on a physical iPhone, an Android phone or a desktop GPU. The 60/30 FPS targets are unverified.

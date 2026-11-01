@@ -87,7 +87,7 @@ export class GameSession {
       const c = createCharacter(gltf, this.defs[i], corners[i], i === 0 ? 'green' : 'yellow');
       this.o.scene.add(c.group);
       this.chars.push(c);
-      this.anims.push(new FighterAnimator(c.group, c.model, c.clips));
+      this.anims.push(new FighterAnimator(c.group, c.model, c.clips, i + 1));
     }
     this.fx = new Effects(!this.o.quality.shadows);
     this.o.scene.add(this.fx.group);
@@ -174,11 +174,12 @@ export class GameSession {
       const z = pr.z + (f.z - pr.z) * alpha;
       const yaw = pr.yaw + wrapAngle(f.yaw - pr.yaw) * alpha;
       this.visYaw[i] = approachAngle(this.visYaw[i], yaw, 14 * dt);
-      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i]);
+      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], w.hitstop > 0 || this.paused ? 0 : dt);
     });
     const t2 = performance.now();
 
-    this.camRig.update(this.o.camera, dt, p.x, p.z, o.x, o.z);
+    const el = this.o.gl.domElement;
+    this.camRig.update(this.o.camera, dt, p.x, p.z, o.x, o.z, el.clientWidth, el.clientHeight);
     this.fx?.update(dt, this.o.camera, w.fighters);
 
     this.hudTimer -= dt;
@@ -262,6 +263,7 @@ export class GameSession {
     const [p, o] = w.fighters;
     this.o.callbacks.onHud({
       names: [this.defs[0].name, this.defs[1].name],
+      shortNames: [this.defs[0].short, this.defs[1].short],
       health: [p.health, o.health],
       maxHealth: [p.stats.maxHealth, o.stats.maxHealth],
       stamina: [p.stamina, o.stamina],
