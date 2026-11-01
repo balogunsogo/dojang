@@ -35,7 +35,7 @@ The simulation runs at a **fixed 60 Hz**. All timings below are in ticks (1 tick
 - A hit during the defender's startup is a **counter hit**: ×1.25 damage and 6 extra stun ticks.
 - **Hit stop** freezes the fight for 5 ticks on a hit and 3 on a block, which sells the impact.
 
-### Techniques (orthodox; kicks use the rear leg)
+### Techniques (orthodox)
 
 | Technique | Startup | Active | Recovery | Stamina | Damage | Heights | Reach (body impact) |
 |---|---|---|---|---|---|---|---|
@@ -44,6 +44,14 @@ The simulation runs at a **fixed 60 Hz**. All timings below are in ticks (1 tick
 | Roundhouse (dollyeo chagi) | 11 | 4 | 17 | 12 | 11 | body/head | 1.02 m |
 | Side kick (yeop chagi) | 14 | 5 | 21 | 15 | 14 | body/head | 1.20 m |
 | Back kick (dwi chagi) | 17 | 5 | 24 | 18 | 17 | body | 1.12 m |
+
+Lead-leg techniques (Phase 2), thrown with the front leg:
+
+| Technique | Startup | Active | Recovery | Stamina | Damage | Reach (body) |
+|---|---|---|---|---|---|---|
+| Lead front kick (apbal ap chagi) | 8 | 3 | 14 | 7 | 6 | 1.06 m |
+| Lead roundhouse (apbal dollyeo chagi) | 7 | 3 | 14 | 8 | 7 | 1.08 m |
+| Lead side / cut kick (apbal yeop chagi) | 9 | 4 | 16 | 9 | 8 | 1.24 m |
 
 Head variants add 2 startup ticks, 2 stamina and ×1.35 damage. Back kick is a turning technique and has the most pushback.
 
@@ -72,24 +80,27 @@ Both rulesets plug into the same `CombatWorld` through the `Ruleset` interface (
 
 Health 100. Rounds are 60 s, best of 3. A round ends on a KO, or on time, where the higher health percentage wins (equal is a draw). The match ends when a fighter reaches 2 round wins, or after 3 rounds.
 
-### Competitive: WT-inspired points (Phase 2)
+### Competitive: WT-inspired points (implemented in Phase 2)
 
-Planned scoring, modeled on the World Taekwondo Competition Rules. **The values must be checked against the current published WT Competition Rules & Interpretation before implementation;** the source couldn't be reached from the build environment.
+Based on the World Taekwondo Competition Rules & Interpretation in force from June 1, 2026. Full details, sources, verification status and simplifications are in [PHASE_2.md](PHASE_2.md).
 
-| Valid technique | Points (planned) |
+| Valid technique | Points |
 |---|---|
-| Punch to trunk protector | 1 |
-| Kick to trunk protector | 2 |
-| Turning kick to trunk | 4 |
+| Punch to trunk | 1 |
+| Kick to trunk | 2 |
 | Kick to head | 3 |
-| Turning kick to head | 5 |
-| Opponent's penalty (gam-jeom) | 1 |
+| Turning kick to trunk | 4 |
+| Turning kick to head | 6 |
+| Opponent's gam-jeom | +1 (+2 for a passive gam-jeom in the last 10 s) |
 
-Planned simplifications, to be documented in game: no electronic-sensor force thresholds (a "valid" kick is a clean, unblocked hit with the foot at the scoring zone); a limited penalty set (stepping out of the mat, excessive guard/clinching); a best-of-three round system with a point gap or superiority decision; no video replay. The game will not claim tournament fidelity.
+- **Rounds:** 90 s each, best of three; a round ends on time, at a 15-point gap, or on 5 gam-jeom.
+- **Tie-breaks:** turning-kick points, then technical value, then fewer gam-jeom, then objective superiority proxies. A golden round is fought if the match is level after three rounds.
+- **Gam-jeom:** boundary, self-inflicted fall, kick below the waist, attack after Kal-yeo, attacking a fallen opponent, punch to the head.
+- **Valid contact** needs a clean, unblocked strike on the scoring zone with enough extension. Only true turning techniques (the back kick) get the turning bonus.
 
 ## Modes
 
-- **AI Sparring (implemented, Arcade rules).** Three AI presets:
+- **AI Sparring: Arcade or Competitive rules (implemented).** The AI was rebuilt in Phase 2 as a layered decision system; see PHASE_2.md §E. Below is the original Phase 1 description of the presets. Three AI presets:
   - **Easy:** 24-tick reaction, rarely guards.
   - **Normal:** 14-tick reaction, guards and counters, picks techniques by range.
   - **Hard:** 8-tick reaction, frequent guard, punishes whiffs, dashes.
@@ -103,8 +114,9 @@ Local belt milestones: white → yellow → green. Each belt is unlocked by spec
 
 ## Touch controls
 
-- **Compact (default):** joystick, a Kick button that repeats the selected kick, and a technique wheel opened by sliding from Kick (or holding it). Slide past the outer ring for head height. Plus Guard, Dash, Punch, switch stance and a Body/Head chip.
-- **Classic:** one button per technique.
+- **Compact (default):** joystick, a Kick button that repeats the selected kick, and a technique wheel opened by sliding from Kick (or holding it). The inner ring holds the lead-leg kicks and the outer ring the rear-leg kicks. Slide past the outer ring for head height. Plus Guard, Dash, Punch, switch stance and a Body/Head chip.
+- **Classic:** one button per technique, plus a Rear/Lead chip.
+- **Keyboard:** hold F with K/L/U for lead-leg kicks. **Gamepad:** D-pad.
 
 See PHASE_1_5.md.
 

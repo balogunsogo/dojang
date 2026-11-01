@@ -45,15 +45,18 @@ Requested after desktop and physical-iPhone UAT. Details and measurements are in
 - ✅ Optional PWA (manifest, icons, iOS hint, Android install button)
 - ⬜ Real-device validation of feel, reach and safe areas (UAT)
 
-## Phase 2: Combat and match systems ⬜
+## Phase 2: Competitive sparring, lead-leg techniques and AI ✅
 
-1. Competitive ruleset (`rules/CompetitiveRules.ts`): check the WT point values first; implement the scoring table, gam-jeom for leaving the mat and stalling, and a round decision. Add a ruleset picker in the menu.
-2. Stamina tuning pass, and a recovery-state animation for exhaustion.
-3. Counterattack depth: punish windows, a parry or "cut" kick (front-leg cut kick) option.
-4. Front-leg techniques (fast lead-leg roundhouse/cut kick) using the existing pose system with `limb: 'leadFoot'`.
-5. AI: tune the three profiles with data. Run AI-vs-AI simulations headless (as in `tests/combat.test.ts`) and record hit and block rates per profile in this document.
-6. Round-transition presentation (fighters return to their marks, a bow).
-7. Tests: competitive scoring, penalties, round decisions.
+Details are in PHASE_2.md.
+
+- ✅ WT 2026-inspired Competitive ruleset: scoring, validation, turning eligibility, gam-jeom subset, boundary, Kal-yeo and Kye-sok, knockdowns, point gap, tie-breaks, best of three, golden round
+- ✅ Lead-leg front, roundhouse and side (cut) kicks with distinct frame data and animation; back kick to the head
+- ✅ Layered AI: perception delay, opponent model, reactive / punish / tactical layers; three profiles distinguished by decision quality
+- ✅ Menu mode selection, Competitive HUD (points, gam-jeom), score and penalty feedback, results with per-round points and technique counts
+- ✅ Controls: F modifier, D-pad, Compact wheel inner ring, Classic Lead chip
+- ✅ Tests: 87 unit and scenario tests; e2e full Competitive match
+- ⬜ Verify the unconfirmed WT values (PHASE_2.md §A) against the official text
+- ⬜ Real-device UAT
 
 ## Phase 3: Complete mobile interaction ⬜
 

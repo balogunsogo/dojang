@@ -1,0 +1,42 @@
+[
+  {
+    "device": "iphone-se-landscape",
+    "uiCoverage": 0.1760733851446044,
+    "fighterPointsVisible": 1,
+    "hudHeight": 28,
+    "draws": 19,
+    "tris": 29534,
+    "animMs": 0.5059754143793423,
+    "simMs": 0.0765829117572499
+  },
+  {
+    "device": "iphone-15-landscape",
+    "uiCoverage": 0.15692132593541044,
+    "fighterPointsVisible": 1,
+    "hudHeight": 28,
+    "draws": 19,
+    "tris": 29534,
+    "animMs": 0.320389905188933,
+    "simMs": 0.10889991621928179
+  },
+  {
+    "device": "iphone-15-pro-max-landscape",
+    "uiCoverage": 0.1363853123509776,
+    "fighterPointsVisible": 1,
+    "hudHeight": 28,
+    "draws": 22,
+    "tris": 29632,
+    "animMs": 0.3900033191906732,
+    "simMs": 0.11313346039617253
+  },
+  {
+    "device": "pixel-8-landscape",
+    "uiCoverage": 0.15321999406452708,
+    "fighterPointsVisible": 1,
+    "hudHeight": 28,
+    "draws": 21,
+    "tris": 29538,
+    "animMs": 0.41380690030948847,
+    "simMs": 0.13019874816822222
+  }
+]
