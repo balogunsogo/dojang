@@ -274,6 +274,20 @@ export function buildDojang(quality: QualityProfile): DojangHandle {
   parts.push(boxAt(2.4, 0.08, 0.4, 2.2, 0.45, -ROOM + 0.45, wood));
   parts.push(boxAt(0.08, 0.45, 0.35, 1.1, 0.22, -ROOM + 0.45, woodDark));
   parts.push(boxAt(0.08, 0.45, 0.35, 3.3, 0.22, -ROOM + 0.45, woodDark));
+  // Training equipment along the back wall (merged into the static mesh: no extra draw calls).
+  // Kicking paddles on a wall rack: red/blue pads on short handles.
+  parts.push(boxAt(1.9, 0.06, 0.08, -2.6, 1.55, -ROOM + 0.16, woodDark));
+  for (let k = 0; k < 6; k++) {
+    const x = -3.35 + k * 0.3;
+    parts.push(boxAt(0.2, 0.32, 0.07, x, 1.3, -ROOM + 0.2, k % 2 ? '#2d5fa8' : '#b8322c'));
+    parts.push(boxAt(0.04, 0.16, 0.04, x, 1.53, -ROOM + 0.2, '#1c1c1c'));
+  }
+  // Stacked trunk protectors (hogu) and a pile of folded mats by the bench.
+  for (let k = 0; k < 3; k++) parts.push(boxAt(0.5, 0.07, 0.36, 2.6 - k * 0.04, 0.53 + k * 0.075, -ROOM + 0.45, k % 2 ? '#2d5fa8' : '#b8322c'));
+  for (let k = 0; k < 4; k++) parts.push(boxAt(1.1, 0.05, 0.6, 4.6, 0.025 + k * 0.05, -ROOM + 0.6, k % 2 ? '#2f6f4a' : '#3a7f56'));
+  // Standing kick shield in the near-left corner.
+  parts.push(boxAt(0.32, 0.6, 0.12, -5.4, 0.62, -ROOM + 0.9, '#b8322c'));
+  parts.push(boxAt(0.28, 0.08, 0.1, -5.4, 0.97, -ROOM + 0.9, '#1c1c1c'));
   const staticGeo = track(mergeGeometries(parts)!);
   parts.forEach((p) => p.dispose());
   const statics = new THREE.Mesh(staticGeo, track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 })));

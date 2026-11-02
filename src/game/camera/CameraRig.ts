@@ -33,8 +33,13 @@ export class CameraRig {
   private viewW = 0;
   private viewH = 0;
 
+  private punch = 0;
+  private baseFov = 0;
+
   addShake(amount: number) {
     this.shake = Math.min(0.12, this.shake + amount);
+    // Heavy impacts also give a brief, subtle zoom "punch" (scales with shake, so the comfort setting reduces it too).
+    this.punch = Math.min(1, this.punch + amount * 12);
   }
 
   input(dYaw: number, dPitch: number, dZoom: number) {
@@ -104,6 +109,12 @@ export class CameraRig {
       this.shake *= Math.exp(-dt * 14);
     }
     cam.lookAt(this.focus);
+    if (!this.baseFov) this.baseFov = cam.fov;
+    if (this.punch > 0.002 || cam.fov !== this.baseFov) {
+      this.punch *= Math.exp(-dt * 10);
+      cam.fov = this.baseFov - this.punch * 2.2;
+      cam.updateProjectionMatrix();
+    }
     this.applyViewOffset(cam, vw, vh);
   }
 

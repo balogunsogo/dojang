@@ -136,6 +136,7 @@ export class GameSession {
     this.o.scene.add(this.fx.group);
     this.syncPrev();
     this.ready = true;
+    audio.setAmbient(true);
   }
 
   private syncPrev() {
@@ -443,6 +444,7 @@ export class GameSession {
 
   dispose() {
     this.ready = false;
+    audio.setAmbient(false);
     for (const a of this.anims) a.dispose();
     for (const c of this.chars) c.dispose();
     this.env?.dispose();

@@ -206,7 +206,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setHud: (hud) => set({ hud }),
   pushToast: (t, ms = 1100) => {
     const id = toastId++;
-    set({ toasts: [...get().toasts.slice(-3), { ...t, id }] });
+    // Referee calls replace each other (one at a time); at most 3 toasts on screen.
+    const keep = get().toasts.filter((x) => !(t.kind === 'call' && x.kind === 'call'));
+    set({ toasts: [...keep.slice(-2), { ...t, id }] });
     setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== id) }), ms);
   },
   setPerf: (perf) => set({ perf }),
