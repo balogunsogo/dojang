@@ -34,6 +34,10 @@ export function SettingsPanel({ compact = false, onControls }: { compact?: boole
           {onControls && <SettingLink label="Control reference" onClick={onControls} testid="open-controls" />}
         </section>
         <section>
+          <GroupLabel>Training</GroupLabel>
+          <SettingToggle label="Show training tips" hint="A coach suggests fixes during training. Hint is always available." checked={s.trainingTips} onChange={set('trainingTips')} />
+        </section>
+        <section>
           <GroupLabel>Camera &amp; comfort</GroupLabel>
           <SettingToggle label="Camera assistance" hint="Lock-on view drifts back to the side when you stop steering" checked={s.cameraAssist} onChange={set('cameraAssist')} />
           <SettingToggle label="Reduce camera shake" checked={s.reduceShake} onChange={set('reduceShake')} />

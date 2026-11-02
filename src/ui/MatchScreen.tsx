@@ -47,6 +47,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
         onTrainingHud: (h) => useGameStore.getState().setTrainingHud(h),
         onTrainingEnd: (r) => useGameStore.getState().finishTraining(r),
         onMatchEnd: (won) => useGameStore.getState().recordMatchResult(won),
+        onCoach: (tip, scheme) => useGameStore.getState().setCoach(tip, scheme),
         onHud: (h) => useGameStore.getState().setHud(h),
         onToast: (t, ms) => useGameStore.getState().pushToast(t, ms),
         onPerf: (p) => useGameStore.getState().setPerf(p),
@@ -103,6 +104,10 @@ export function MatchScreen() {
   useEffect(() => {
     session?.setPrefs({ cameraAssist: settings.cameraAssist, reduceShake: settings.reduceShake, reduceFlash: settings.reduceFlash });
   }, [session, settings.cameraAssist, settings.reduceShake, settings.reduceFlash]);
+
+  useEffect(() => {
+    session?.setCoachPrefs({ enabled: settings.trainingTips, showTouch, controlScheme: settings.controlScheme });
+  }, [session, settings.trainingTips, showTouch, settings.controlScheme]);
 
   // Tell the camera how much of the screen the HUD and touch controls cover,
   // so it frames both fighters inside the unobstructed region.

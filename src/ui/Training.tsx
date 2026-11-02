@@ -1,18 +1,32 @@
 import type { GameSession } from '../game/GameSession';
 import { BELT_REQUIREMENTS, nextBelt, type Progress } from '../game/progress/progress';
+import { useEffect, useState } from 'react';
 import { ACTIVITIES, activityById } from '../game/training/activities';
+import { how } from '../game/training/Coach';
 import { useGameStore } from '../store/useGameStore';
 import { PrimaryButton, QuietButton, useGamepadNav } from './kit';
 import { PromotionNote } from './Overlays';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-/** Compact top bar for training: activity, objective, clock, accuracy, combo, target. */
+/** Compact top bar for training: activity, objective, clock, accuracy, combo, target, coach. */
 export function TrainingHudView() {
   const h = useGameStore((s) => s.trainingHud);
   const toasts = useGameStore((s) => s.toasts);
+  const coach = useGameStore((s) => s.coach);
+  const activityId = useGameStore((s) => s.activity);
   const session = typeof window !== 'undefined' ? window.__dojang?.session : undefined;
+  // H asks the coach for help (keyboard players; not bound to any game action).
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.code === 'KeyH' && !e.repeat && !useGameStore.getState().paused) window.__dojang?.session.coachHint();
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
   if (!h) return null;
+  const scheme = coach?.scheme ?? 'keyboard';
+  const step = h.nextStep ? activityById(activityId).steps?.find((st) => st.label === h.nextStep) : undefined;
   return (
     <div className="hud training" data-testid="training-hud">
       <div className="hud-top train-bar">
@@ -32,6 +46,11 @@ export function TrainingHudView() {
           <span>Acc {pct(h.accuracy)}</span>
           {h.combo > 1 && <span className="combo">×{h.combo}</span>}
         </div>
+        {session && !h.done && !h.failed && (
+          <button className="tbtn hint" onPointerDown={() => session.coachHint()} aria-label="Hint" title={scheme === 'keyboard' ? 'Hint (H)' : 'Hint'} data-testid="coach-hint">
+            Hint
+          </button>
+        )}
         {h.kind === 'practice' && session && (
           <button className="tbtn finish" onPointerDown={() => session.finishTraining()} data-testid="finish-practice">
             Finish
@@ -42,15 +61,18 @@ export function TrainingHudView() {
         {h.nextStep ? (
           <>
             Next: <b>{h.nextStep}</b>
+            {step && <span className="how"> · {how(step.accept[0], scheme)}</span>}
           </>
         ) : h.target ? (
           <>
-            Target: <b className={`tgt ${h.target}`}>{h.target === 'head' ? 'HEAD (hold E / Head)' : 'BODY'}</b>
+            Target: <b className={`tgt ${h.target}`}>{h.target === 'head' ? 'Head' : 'Body'}</b>
+            <span className="how"> · {how(h.target, scheme)}</span>
           </>
         ) : (
           'Any technique on the target'
         )}
       </div>
+      <CoachTipView />
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
@@ -59,6 +81,44 @@ export function TrainingHudView() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The single coaching tip: dismiss now, or turn automatic tips off. */
+function CoachTipView() {
+  const tip = useGameStore((s) => s.coach?.tip ?? null);
+  const enabled = useGameStore((s) => s.settings.trainingTips);
+  const update = useGameStore((s) => s.updateSettings);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const id = window.setTimeout(() => setNote(null), 3500);
+    return () => window.clearTimeout(id);
+  }, [note]);
+  const session = window.__dojang?.session;
+  if (!tip && !note) return null;
+  return (
+    <div className={`coach-tip ${tip?.tone ?? 'info'}`} role="status" aria-live="polite" data-testid="coach-tip" data-tip={tip?.id ?? 'note'}>
+      <p>{tip ? tip.text : note}</p>
+      {tip && (
+        <div className="coach-actions">
+          {enabled && !tip.manual && (
+            <button
+              onPointerDown={() => {
+                update({ trainingTips: false });
+                setNote('Tips off. Hint is still here; turn tips back on in Settings.');
+              }}
+              data-testid="coach-off"
+            >
+              Turn off tips
+            </button>
+          )}
+          <button onPointerDown={() => session?.coachDismiss()} aria-label="Dismiss tip" data-testid="coach-dismiss">
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

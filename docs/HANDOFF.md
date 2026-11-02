@@ -1,5 +1,12 @@
 # Handoff
 
+> **Training coach** is on `claude/amazing-galileo-4k6k1j`, branched from `main` 503923b (the accepted UI system, PR #8).
+> - **Code:** the deterministic tips engine is `src/game/training/Coach.ts`; it only observes, using feedback codes added to `TrainingController`. It is wired through `GameSession` (`coachHint`, `coachDismiss`, `setCoachPrefs`). The UI lives in `TrainingHudView` and `CoachTipView`.
+> - **Setting:** `trainingTips` (Settings › Training).
+> - **Details:** DESIGN_SYSTEM.md › Training coach.
+> - **Verification:** `scripts/coach-smoke.mjs` 11/11.
+> - **No logic changes:** gameplay, scoring, completion and progression logic are unchanged. The only data change is the Head kick challenge's description, which no longer names a keyboard key.
+
 > **UI System implementation** is on `claude/amazing-galileo-4k6k1j`, branched from `main` f8cd39e after PR #6 merged. It implements the approved Claude Design package (tokens, fonts, components, screens).
 > - **Reference:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) covers the tokens, type roles, component inventory, screens, responsive rules and accessibility.
 > - **Code:** `src/tokens.css` (verbatim from the package), `src/fonts.css` with `src/assets/fonts` (built by `scripts/build-fonts.py`), `src/ui/kit.tsx`, and `src/ui/menu.css`. The screens are in `Menu.tsx`, `SettingsPanel.tsx`, `Overlays.tsx` and `Training.tsx`. Gameplay CSS lives in `src/styles.css`.

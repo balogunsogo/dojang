@@ -1,3 +1,4 @@
+import type { CoachTip, InputScheme } from '../game/training/Coach';
 import { create } from 'zustand';
 import type { Difficulty } from '../game/ai/AIController';
 import type { MatchPhase } from '../game/combat/CombatWorld';
@@ -82,6 +83,8 @@ export interface Settings {
   muted: boolean;
   /** Live 3D dojang behind the main menu (off = still backdrop). */
   menuScene: boolean;
+  /** Automatic coaching tips during training (the Hint action always works). */
+  trainingTips: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -103,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ambientVolume: 0.5,
   muted: false,
   menuScene: true,
+  trainingTips: true,
 };
 
 const SETTINGS_KEY = 'dojang.settings.v1';
@@ -145,6 +149,9 @@ interface GameStore {
   trainingResult: TrainingResult | null;
   /** Belt just earned (shown once, then cleared). */
   promotion: Belt | null;
+  /** Training coach tip on screen and the active input scheme. */
+  coach: { tip: CoachTip | null; scheme: InputScheme } | null;
+  setCoach(tip: CoachTip | null, scheme: InputScheme): void;
   /** Current main-menu panel (kept when returning from a match). */
   menuPanel: MenuPanel;
   setMenuPanel(p: MenuPanel): void;
@@ -191,11 +198,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   trainingHud: null,
   trainingResult: null,
   promotion: null,
+  coach: null,
+  setCoach: (tip, scheme) => set({ coach: { tip, scheme } }),
   menuPanel: 'home',
   setMenuPanel: (menuPanel) => set({ menuPanel }),
-  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
-  startTraining: (activity) => set({ screen: 'match', mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
-  toMenu: () => set({ screen: 'menu', menuPanel: 'home', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
+  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startTraining: (activity) => set({ screen: 'match', mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  toMenu: () => set({ screen: 'menu', menuPanel: 'home', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
   setFighter: (fighter) => commitProgress({ ...get().progress, fighter }),
   setTrainingHud: (trainingHud) => set({ trainingHud }),
   finishTraining: (r) => {
