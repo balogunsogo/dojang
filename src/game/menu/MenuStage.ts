@@ -221,7 +221,8 @@ export class MenuStage {
     this.camFov += (this.shot.fov - this.camFov) * k;
     const t = this.o.reducedMotion ? 0 : this.time;
     const cam = this.camera;
-    cam.position.set(this.camPos.x + Math.sin(t * 0.13) * 0.22, this.camPos.y + Math.sin(t * 0.21) * 0.04, this.camPos.z + Math.cos(t * 0.11) * 0.18);
+    // Barely-there drift: the room should feel alive, never seasick.
+    cam.position.set(this.camPos.x + Math.sin(t * 0.09) * 0.08, this.camPos.y + Math.sin(t * 0.15) * 0.015, this.camPos.z + Math.cos(t * 0.08) * 0.06);
     const portrait = cam.aspect < 0.9;
     // Portrait: pull back and lower the aim so the fighters sit above the menu.
     if (portrait) {

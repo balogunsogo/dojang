@@ -10,7 +10,7 @@ import { PauseMenu, ResultOverlay } from './Overlays';
 import { PerfOverlay } from './PerfOverlay';
 import { RotatePrompt } from './RotatePrompt';
 import { TouchControls } from './TouchControls';
-import { PromotionOverlay, TrainingHudView, TrainingSummary } from './Training';
+import { TrainingHudView, TrainingSummary } from './Training';
 
 declare global {
   interface Window {
@@ -52,7 +52,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
         onPerf: (p) => useGameStore.getState().setPerf(p),
         onPauseToggle: () => {
           const s = useGameStore.getState();
-          if (s.hud?.phase !== 'match-over') s.setPaused(!s.paused);
+          if (s.hud?.phase !== 'match-over' && !s.trainingResult) s.setPaused(!s.paused);
         },
       },
     });
@@ -167,7 +167,6 @@ export function MatchScreen() {
       {session && <PauseMenu session={session} />}
       {session && mode !== 'training' && <ResultOverlay session={session} />}
       {session && mode === 'training' && <TrainingSummary session={session} />}
-      <PromotionOverlay />
       {settings.showPerf && <PerfOverlay />}
       {touch && <RotatePrompt />}
     </div>

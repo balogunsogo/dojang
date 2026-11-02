@@ -1,8 +1,9 @@
 import type { GameSession } from '../game/GameSession';
 import { BELT_REQUIREMENTS, nextBelt, type Progress } from '../game/progress/progress';
-import { BELT_COLORS } from '../game/render/characterFactory';
 import { ACTIVITIES, activityById } from '../game/training/activities';
 import { useGameStore } from '../store/useGameStore';
+import { PrimaryButton, QuietButton, useGamepadNav } from './kit';
+import { PromotionNote } from './Overlays';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -50,7 +51,7 @@ export function TrainingHudView() {
           'Any technique on the target'
         )}
       </div>
-      <div className="toasts">
+      <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             <div className="t">{t.text}</div>
@@ -62,21 +63,18 @@ export function TrainingHudView() {
   );
 }
 
-/** Requirements checklist for the next belt. */
+/** Compact requirements checklist for the next belt (summary screen). */
 export function BeltRequirements({ progress }: { progress: Progress }) {
   const nb = nextBelt(progress.belt);
-  if (!nb) return <p className="muted">Green belt reached: every milestone in this version is complete.</p>;
+  if (!nb) return <p className="caption">Green belt reached: every milestone in this version is complete.</p>;
   return (
-    <ul className="reqs" data-testid="belt-reqs">
+    <ul className="reqs compact" data-testid="belt-reqs" aria-label={`Toward ${nb} belt`}>
       {BELT_REQUIREMENTS[nb].map((r) => {
         const ok = r.done(progress);
         return (
           <li key={r.id} className={ok ? 'ok' : ''}>
-            <span className="tick" aria-hidden>
-              {ok ? '✓' : '○'}
-            </span>
-            <span>{r.label}</span>
-            <span className="st">{r.status(progress)}</span>
+            <span className="req-label">{r.label}</span>
+            <span className="req-status">{ok ? 'Done' : r.status(progress)}</span>
           </li>
         );
       })}
@@ -84,117 +82,101 @@ export function BeltRequirements({ progress }: { progress: Progress }) {
   );
 }
 
-export function BeltChip({ belt }: { belt: string }) {
-  return (
-    <span className="belt-chip" style={{ ['--belt' as string]: BELT_COLORS[belt as keyof typeof BELT_COLORS] }}>
-      {belt[0].toUpperCase() + belt.slice(1)} belt
-    </span>
-  );
-}
-
-/** End-of-activity summary with what to improve and what unlocks next. */
+/** End-of-activity summary: what happened, one tip, what unlocks next. */
 export function TrainingSummary({ session }: { session: GameSession }) {
   const r = useGameStore((s) => s.trainingResult);
   const progress = useGameStore((s) => s.progress);
   const startTraining = useGameStore((s) => s.startTraining);
   const toMenu = useGameStore((s) => s.toMenu);
-  const promotion = useGameStore((s) => s.promotion);
-  if (!r || promotion) return null;
+  const clearPromotion = useGameStore((s) => s.clearPromotion);
+  useGamepadNav(r ? toMenu : undefined);
+  if (!r) return null;
   const a = activityById(r.activity);
   const rec = progress.records[r.activity];
   const idx = ACTIVITIES.findIndex((x) => x.id === a.id);
   const next = ACTIVITIES[idx + 1];
+  const nb = nextBelt(progress.belt);
   const tip =
     r.attempts === 0
-      ? 'Throw some techniques at the target!'
+      ? 'Throw some techniques at the target.'
       : r.accuracy < 0.5
         ? 'Many techniques missed: step closer before kicking, and wait for the partner to be in range.'
         : r.accuracy < 0.75
           ? 'Good. Tighten your range: stop just outside the partner, then kick.'
           : 'Excellent accuracy.';
+  const kind = a.kind === 'practice' ? 'Practice' : a.kind === 'challenge' ? 'Challenge' : 'Drill';
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Training summary" data-testid="training-summary">
-      <div className="panel wide">
-        <p className="eyebrow">Training · {a.kind === 'practice' ? 'Practice' : a.kind === 'challenge' ? 'Challenge' : 'Drill'}</p>
-        <h2 className={r.completed ? 'win' : ''}>{a.kind === 'practice' ? 'Practice summary' : r.completed ? 'Complete!' : "Time's up"}</h2>
-        <p className="muted">{a.title}</p>
-        <div className="stat-grid">
-          <div>
-            <b>{r.attempts}</b>
-            <span>techniques</span>
-          </div>
-          <div>
-            <b>{r.hits}</b>
-            <span>valid hits</span>
-          </div>
-          <div>
-            <b>{pct(r.accuracy)}</b>
-            <span>accuracy</span>
-          </div>
-          <div>
-            <b>{r.bestCombo}</b>
-            <span>best combo</span>
-          </div>
-          {r.time !== null && (
+    <div className="overlay match-panel" role="dialog" aria-modal="true" aria-label="Training summary" data-testid="training-summary">
+      <div className="panel-col">
+        <p className="context">
+          Training · {kind} · {a.title}
+        </p>
+        <h1 className="title">{a.kind === 'practice' ? 'Practice summary' : r.completed ? 'Complete' : "Time's up"}</h1>
+        <div className="panel-scroll">
+          <dl className="facts results">
             <div>
-              <b>{r.time.toFixed(1)} s</b>
-              <span>time</span>
+              <dt>Techniques</dt>
+              <dd>{r.attempts}</dd>
             </div>
-          )}
-          {rec && (
             <div>
-              <b>{pct(rec.bestAccuracy)}</b>
-              <span>best accuracy</span>
+              <dt>Valid hits</dt>
+              <dd>{r.hits}</dd>
             </div>
-          )}
+            <div>
+              <dt>Accuracy</dt>
+              <dd>{pct(r.accuracy)}</dd>
+            </div>
+            <div>
+              <dt>Best combo</dt>
+              <dd>{r.bestCombo}</dd>
+            </div>
+            {r.time !== null && (
+              <div>
+                <dt>Time</dt>
+                <dd>{r.time.toFixed(1)} s</dd>
+              </div>
+            )}
+            {rec && (
+              <div>
+                <dt>Best accuracy</dt>
+                <dd>{pct(rec.bestAccuracy)}</dd>
+              </div>
+            )}
+          </dl>
+          <p className="body-copy">{tip}</p>
+          <PromotionNote />
+          {nb && <h2 className="group-label">Toward {nb} belt</h2>}
+          <BeltRequirements progress={progress} />
         </div>
-        <p className="tip">{tip}</p>
-        <h3>Next belt</h3>
-        <BeltRequirements progress={progress} />
-        <div className="row actions">
-          <button className="primary" onClick={() => session.rematch()} data-testid="retry-activity" autoFocus>
-            Retry
-          </button>
-          {next && (
-            <button onClick={() => startTraining(next.id)} data-testid="next-activity">
-              Next: {next.title}
-            </button>
-          )}
-          <button
+        <div className="actions">
+          <PrimaryButton
+            hint="Enter"
+            autoFocus
+            testid="retry-activity"
             onClick={() => {
-              toMenu();
-              useGameStore.getState().setMenuPanel('training');
+              clearPromotion();
+              session.rematch();
             }}
           >
-            Training menu
-          </button>
-          <button onClick={toMenu}>Main menu</button>
+            Retry
+          </PrimaryButton>
+          <div className="foot-row">
+            {next && (
+              <QuietButton onClick={() => startTraining(next.id)} testid="next-activity">
+                Next: {next.title}
+              </QuietButton>
+            )}
+            <QuietButton
+              onClick={() => {
+                toMenu();
+                useGameStore.getState().setMenuPanel('training');
+              }}
+            >
+              Training menu
+            </QuietButton>
+            <QuietButton onClick={toMenu}>Main menu</QuietButton>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/** Shown once when a belt is earned. */
-export function PromotionOverlay() {
-  const belt = useGameStore((s) => s.promotion);
-  const clear = useGameStore((s) => s.clearPromotion);
-  if (!belt) return null;
-  return (
-    <div className="overlay promo" role="dialog" aria-modal="true" aria-label="Belt promotion" data-testid="promotion">
-      <div className="panel">
-        <p className="eyebrow">Belt promotion</p>
-        <div className="belt-band" style={{ ['--belt' as string]: BELT_COLORS[belt] }} aria-hidden>
-          <i />
-        </div>
-        <h2 className="win">{belt[0].toUpperCase() + belt.slice(1)} belt</h2>
-        <p>
-          You earned the <b>{belt[0].toUpperCase() + belt.slice(1)} belt</b>. It now appears on your dobok.
-        </p>
-        <p className="muted small">A gameplay milestone inspired by Taekwondo training, not an official grading.</p>
-        <button className="primary" onClick={clear} autoFocus data-testid="promotion-ok">
-          Continue
-        </button>
       </div>
     </div>
   );
