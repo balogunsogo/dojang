@@ -74,7 +74,6 @@ export function MenuBackdrop() {
     <div className={`menu-backdrop ${live ? 'live' : ''}`} aria-hidden>
       <div className="still" />
       {enabled && <canvas key={quality} ref={canvas} className="stage" />}
-      <div className="grade" />
     </div>
   );
 }

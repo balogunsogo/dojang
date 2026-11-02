@@ -193,9 +193,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   promotion: null,
   menuPanel: 'home',
   setMenuPanel: (menuPanel) => set({ menuPanel }),
-  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null }),
-  startTraining: (activity) => set({ screen: 'match', mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null }),
-  toMenu: () => set({ screen: 'menu', menuPanel: 'home', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null }),
+  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
+  startTraining: (activity) => set({ screen: 'match', mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
+  toMenu: () => set({ screen: 'menu', menuPanel: 'home', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null }),
   setFighter: (fighter) => commitProgress({ ...get().progress, fighter }),
   setTrainingHud: (trainingHud) => set({ trainingHud }),
   finishTraining: (r) => {

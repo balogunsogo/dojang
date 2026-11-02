@@ -44,11 +44,11 @@ export function PwaHint() {
         )}
       </span>
       {evt && (
-        <button className="primary" onClick={() => evt.prompt().finally(() => setEvt(null))}>
+        <button className="btn-quiet" onClick={() => evt.prompt().finally(() => setEvt(null))}>
           Install
         </button>
       )}
-      <button onClick={() => update({ pwaHintDismissed: true })} aria-label="Dismiss">
+      <button className="btn-quiet" onClick={() => update({ pwaHintDismissed: true })} aria-label="Dismiss">
         ✕
       </button>
     </div>

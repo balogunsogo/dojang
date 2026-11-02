@@ -8,6 +8,8 @@ export default defineConfig({
     target: 'es2020',
     sourcemap: false,
     chunkSizeWarningLimit: 1200,
+    // Never inline font files: unicode-range faces must stay lazy.
+    assetsInlineLimit: (file: string) => (file.endsWith('.woff2') ? false : undefined),
     rollupOptions: {
       output: {
         manualChunks(id: string) {

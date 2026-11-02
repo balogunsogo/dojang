@@ -501,6 +501,7 @@ if (runs('training')) {
   // 2. Body kick challenge.
   await page.click('[data-testid=mode-training]');
   await page.click('[data-testid=activity-body10]');
+  await page.click('[data-testid=begin-activity]');
   await page.waitForFunction(() => window.__dojang?.session?.ready && window.__dojang.session.training, null, { timeout: 90000 });
   const who = await page.evaluate(() => window.__dojang.session.defs[0].id);
   check('training: the selected fighter is the one you control', who === 'hana', who);
@@ -524,13 +525,13 @@ if (runs('training')) {
   const promo = await page.waitForSelector('[data-testid=promotion]', { timeout: 10000 }).catch(() => null);
   check('training: completing the last milestone earns the Yellow belt', !!promo);
   if (shots && promo) await page.screenshot({ path: `${shots}/belt-promotion.jpg`, type: 'jpeg', quality: 80 });
-  if (promo) await page.click('[data-testid=promotion-ok]');
   await page.waitForSelector('[data-testid=training-summary]', { timeout: 10000 }).catch(() => {});
   if (shots) await page.screenshot({ path: `${shots}/training-summary.jpg`, type: 'jpeg', quality: 80 });
   check('training: summary shows accuracy and next belt requirements', /accuracy/.test(await page.textContent('[data-testid=training-summary]')) && !!(await page.$('[data-testid=belt-reqs]')));
   // 4. Combination drill (front kick → roundhouse) via the Training menu.
   await page.click('text=Training menu');
   await page.click('[data-testid=activity-combo-front-round]');
+  await page.click('[data-testid=begin-activity]');
   await page.waitForFunction(() => window.__dojang?.session?.ready && window.__dojang.session.training?.activity.id === 'combo-front-round', null, { timeout: 90000 });
   for (let r = 0; r < 3; r++) {
     await kick('KeyK');
@@ -669,7 +670,7 @@ if (runs('competitive')) {
   await page.waitForSelector('[data-testid=result]', { state: 'detached', timeout: 10000 }).catch(() => {});
   await page.keyboard.press('Escape');
   await page.waitForSelector('text=Paused', { timeout: 10000 });
-  await page.click('.panel >> text=Main menu');
+  await page.click('[data-testid=quit-to-menu]');
   const menu = await page.waitForSelector('[data-testid=mode-competitive]', { timeout: 10000 }).catch(() => null);
   check('competitive: return to the main menu', !!menu);
   check('competitive: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
