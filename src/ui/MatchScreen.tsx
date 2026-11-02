@@ -1,7 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { audio } from '../game/audio/AudioEngine';
 import { GameSession } from '../game/GameSession';
 import { InputManager } from '../game/input/InputManager';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
@@ -92,8 +91,8 @@ export function MatchScreen() {
   const showTouch = touch || settings.forceTouch || new URLSearchParams(location.search).get('touch') === '1';
 
   useEffect(() => {
-    audio.setVolume(settings.volume);
-  }, [settings.volume]);
+    session?.setPrefs({ cameraAssist: settings.cameraAssist, reduceShake: settings.reduceShake, reduceFlash: settings.reduceFlash });
+  }, [session, settings.cameraAssist, settings.reduceShake, settings.reduceFlash]);
 
   // Tell the camera how much of the screen the HUD and touch controls cover,
   // so it frames both fighters inside the unobstructed region.

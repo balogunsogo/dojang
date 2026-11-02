@@ -3,7 +3,10 @@ import type { InputManager } from '../game/input/InputManager';
 import { useGameStore } from '../store/useGameStore';
 import { KICK_LABEL, pickWheel, WHEEL_HEAD_RADIUS, WHEEL_ITEMS, WHEEL_LEAD_EDGE, WHEEL_LEAD_RADIUS, WHEEL_RADIUS, type WheelKick, type WheelPick } from './wheel';
 
-const HOLD_MS = 260;
+// Hold time before the wheel opens without sliding. Sliding past TAP_SLOP
+// opens it immediately, so this only matters for "hold to browse"; 200 ms
+// stays clear of ordinary taps (~80–150 ms) while feeling quicker than 260 ms.
+const HOLD_MS = 200;
 const TAP_SLOP = 14;
 
 /**
@@ -24,6 +27,9 @@ const TAP_SLOP = 14;
 export function TouchControls({ input }: { input: InputManager }) {
   const t = input.touch;
   const scheme = useGameStore((s) => s.settings.controlScheme);
+  const opacity = useGameStore((s) => s.settings.controlOpacity);
+  const scale = useGameStore((s) => s.settings.controlScale);
+  const lefty = useGameStore((s) => s.settings.leftHanded);
   const setPaused = useGameStore((s) => s.setPaused);
   const stick = useRef<{ id: number; ox: number; oy: number } | null>(null);
   const cam = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -100,7 +106,12 @@ export function TouchControls({ input }: { input: InputManager }) {
   };
 
   return (
-    <div className={`touch scheme-${scheme}`} onContextMenu={(e) => e.preventDefault()} data-testid="touch-controls">
+    <div
+      className={`touch scheme-${scheme} ${lefty ? 'lefty' : ''}`}
+      style={{ ['--ctl-opacity' as string]: opacity, ['--ctl-scale' as string]: scale }}
+      onContextMenu={(e) => e.preventDefault()}
+      data-testid="touch-controls"
+    >
       <div className="zone-cam" onPointerDown={camDown} onPointerMove={camMove} onPointerUp={camUp} onPointerCancel={camUp} data-testid="cam-zone" />
       <div className="zone-stick" onPointerDown={stickDown} onPointerMove={stickMove} onPointerUp={stickUp} onPointerCancel={stickUp} data-testid="stick-zone">
         <div className="stick-base" ref={baseRef}>
@@ -108,7 +119,7 @@ export function TouchControls({ input }: { input: InputManager }) {
         </div>
       </div>
       {scheme === 'compact' ? (
-        <CompactCluster input={input} high={high} toggleHigh={toggleHigh} />
+        <CompactCluster input={input} high={high} toggleHigh={toggleHigh} mirror={lefty ? -1 : 1} />
       ) : (
         <div className="cluster classic">
           <TapButton cls="b-punch" label="Punch" onTap={() => input.press('punch')} />
@@ -133,7 +144,7 @@ export function TouchControls({ input }: { input: InputManager }) {
   );
 }
 
-function CompactCluster({ input, high, toggleHigh }: { input: InputManager; high: boolean; toggleHigh: () => void }) {
+function CompactCluster({ input, high, toggleHigh, mirror }: { input: InputManager; high: boolean; toggleHigh: () => void; mirror: 1 | -1 }) {
   const t = input.touch;
   const selected = useGameStore((s) => s.settings.selectedKick);
   const update = useGameStore((s) => s.updateSettings);
@@ -163,7 +174,8 @@ function CompactCluster({ input, high, toggleHigh }: { input: InputManager; high
       s.moved = true;
       setOpen(true);
     }
-    if (s.moved || open) setPick(pickWheel(dx, dy));
+    // The wheel fans away from the screen edge: mirror x for the left-handed layout.
+    if (s.moved || open) setPick(pickWheel(dx * mirror, dy));
   };
   const onUp = (e: RPointerEvent<HTMLDivElement>) => {
     const s = g.current;
@@ -171,7 +183,7 @@ function CompactCluster({ input, high, toggleHigh }: { input: InputManager; high
     window.clearTimeout(s.timer);
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
-    const p = pickWheel(dx, dy);
+    const p = pickWheel(dx * mirror, dy);
     const wasOpen = open || s.moved;
     g.current = null;
     setDown(false);

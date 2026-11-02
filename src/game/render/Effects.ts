@@ -47,12 +47,16 @@ export class Effects {
     }
   }
 
+  /** Comfort setting: smaller, dimmer hit flashes. */
+  reduced = false;
+
   spawn(pos: [number, number, number], kind: 'hit' | 'heavy' | 'block') {
+    if (this.reduced && kind !== 'heavy') return;
     const f = this.flashes.reduce((a, b) => (a.life < b.life ? a : b));
     f.mesh.position.set(pos[0], pos[1], pos[2]);
     f.mesh.visible = true;
     f.max = f.life = kind === 'block' ? 0.16 : 0.24;
-    f.scale = kind === 'heavy' ? 2.6 : kind === 'hit' ? 1.8 : 1.4;
+    f.scale = (kind === 'heavy' ? 2.6 : kind === 'hit' ? 1.8 : 1.4) * (this.reduced ? 0.5 : 1);
     const mat = f.mesh.material as THREE.MeshBasicMaterial;
     mat.color.copy((kind === 'block' ? this.flashMatBlock : this.flashMatHit).color);
   }

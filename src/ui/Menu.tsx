@@ -21,7 +21,7 @@ export function Menu() {
   const settings = useGameStore((s) => s.settings);
   const update = useGameStore((s) => s.updateSettings);
   const [panel, setPanel] = useState<'main' | 'controls' | 'settings'>('main');
-  const [mode, setMode] = useState<Mode>(() => useGameStore.getState().mode);
+  const [mode, setMode] = useState<Mode>(() => { const m = useGameStore.getState().mode; return m === 'training' ? 'arcade' : m; });
 
   const start = (d: Difficulty) => {
     audio.unlock();

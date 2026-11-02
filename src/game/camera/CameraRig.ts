@@ -16,6 +16,8 @@ export class CameraRig {
   pitch = 0.2;
   zoom = 0;
   lockOn = true;
+  /** Framing assistance: drift to the side view when the player is not steering. */
+  assist = true;
   /** Seconds since the player last moved the camera. */
   private idle = 10;
   private readonly focus = new THREE.Vector3(0, 1.1, 0);
@@ -68,7 +70,7 @@ export class CameraRig {
       const dx = nz * c + nx * k;
       const dz = -nx * c + nz * k;
       const desired = Math.atan2(dx, dz);
-      const assist = this.idle > 1.2 ? 1 - Math.exp(-dt * 2.2) : 0;
+      const assist = this.assist && this.idle > 1.2 ? 1 - Math.exp(-dt * 2.2) : 0;
       if (!this.initialized) {
         this.yaw = desired;
         this.initialized = true;

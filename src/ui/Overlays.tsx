@@ -1,18 +1,19 @@
+import { useState } from 'react';
 import type { GameSession } from '../game/GameSession';
 import { useGameStore } from '../store/useGameStore';
+import { SettingsPanel } from './SettingsPanel';
 
 export function PauseMenu({ session }: { session: GameSession }) {
   const paused = useGameStore((s) => s.paused);
   const setPaused = useGameStore((s) => s.setPaused);
   const toMenu = useGameStore((s) => s.toMenu);
-  const scheme = useGameStore((s) => s.settings.controlScheme);
-  const update = useGameStore((s) => s.updateSettings);
+  const [showSettings, setShowSettings] = useState(false);
   if (!paused) return null;
   return (
-    <div className="overlay">
-      <div className="panel">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Paused">
+      <div className={`panel ${showSettings ? 'wide' : ''}`}>
         <h2>Paused</h2>
-        <button className="primary" onClick={() => setPaused(false)}>
+        <button className="primary" onClick={() => setPaused(false)} autoFocus>
           Resume
         </button>
         <button
@@ -23,14 +24,10 @@ export function PauseMenu({ session }: { session: GameSession }) {
         >
           Restart match
         </button>
-        <div className="seg" role="group" aria-label="Touch controls">
-          <button className={scheme === 'compact' ? 'on' : ''} onClick={() => update({ controlScheme: 'compact' })}>
-            Compact
-          </button>
-          <button className={scheme === 'classic' ? 'on' : ''} onClick={() => update({ controlScheme: 'classic' })}>
-            Classic
-          </button>
-        </div>
+        <button onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings} data-testid="pause-settings">
+          {showSettings ? 'Hide settings' : 'Settings'}
+        </button>
+        {showSettings && <SettingsPanel compact />}
         <button onClick={toMenu}>Main menu</button>
       </div>
     </div>

@@ -422,6 +422,60 @@ if (runs('pwa')) {
   await ctx.close();
 }
 
+// ------------------------------------- Phase 3 gate: full match by touch only
+if (runs('mobile-gate')) {
+  const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off', { leftHanded: true, controlScale: 1.1, controlOpacity: 0.5 });
+  await waitPhase(page, 'fight');
+  const { touch, center, setRange, idle, lastAttack } = await touchKit(ctx, page);
+  const vw = PHONE.viewport.width;
+  const kick = await center('[data-testid=kick-main]');
+  check('mobile gate: left-handed layout puts the Kick button on the left', kick.x < vw / 2, `x ${Math.round(kick.x)}`);
+  // Mirrored wheel: slide toward the screen centre (right) to reach Side.
+  await setRange(1.15);
+  await touch('touchStart', [{ id: 1, ...kick }]);
+  await touch('touchMove', [{ id: 1, x: kick.x + 60, y: kick.y - 20 }]);
+  await touch('touchMove', [{ id: 1, x: kick.x + 110, y: kick.y - 36 }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  check('mobile gate: mirrored wheel selects Side', (await lastAttack()).id === 'side');
+  await idle();
+  // Pause and resume by touch.
+  const pause = await center('[aria-label="Pause"]');
+  await touch('touchStart', [{ id: 2, ...pause }]);
+  await touch('touchEnd', []);
+  await page.waitForSelector('text=Paused', { timeout: 5000 }).catch(() => {});
+  const resume = await center('text=Resume');
+  check('mobile gate: pause button opens the pause menu', !!resume);
+  if (resume) {
+    await touch('touchStart', [{ id: 3, ...resume }]);
+    await touch('touchEnd', []);
+  }
+  await page.waitForSelector('text=Paused', { state: 'detached', timeout: 5000 }).catch(() => {});
+  check('mobile gate: Resume by touch continues the match', !(await page.$('text=Paused')));
+  // Finish the match by touch: two knockouts (health lowered to keep the test short).
+  for (let r = 0; r < 2; r++) {
+    await page.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+    await setRange(1.0);
+    await page.evaluate(() => (window.__dojang.session.world.fighters[1].health = 3));
+    const k = await center('[data-testid=kick-main]');
+    await touch('touchStart', [{ id: 4, ...k }]);
+    await touch('touchEnd', []);
+    await page.waitForFunction(() => ['round-over', 'match-over'].includes(window.__dojang.session.world.phase), null, { timeout: 20000 }).catch(() => {});
+  }
+  await page.waitForSelector('[data-testid=rematch]', { timeout: 30000 }).catch(() => {});
+  const rm = await center('[data-testid=rematch]');
+  check('mobile gate: match finished by touch shows the result', !!rm);
+  if (rm) {
+    await touch('touchStart', [{ id: 5, ...rm }]);
+    await touch('touchEnd', []);
+    await page.waitForFunction(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.fighters[1].health === 100, null, { timeout: 10000 }).catch(() => {});
+  }
+  check('mobile gate: Rematch by touch restarts', await page.evaluate(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.matchWinner === null));
+  if (shots) await page.screenshot({ path: `${shots}/mobile-lefty.jpg`, type: 'jpeg', quality: 80 });
+  check('mobile gate: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ------------------------------------------------ competitive: full match
 if (runs('competitive')) {
   const { ctx, page, errors } = await (async () => {

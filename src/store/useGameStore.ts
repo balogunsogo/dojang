@@ -4,6 +4,8 @@ import type { MatchPhase } from '../game/combat/CombatWorld';
 import type { PerfSnapshot } from '../game/perf/PerfMonitor';
 import type { QualitySetting } from '../game/render/quality';
 
+export type GameMode = 'arcade' | 'competitive' | 'training';
+
 export interface HudState {
   names: [string, string];
   shortNames: [string, string];
@@ -20,7 +22,7 @@ export interface HudState {
   high: boolean;
   lockOn: boolean;
   stance: 'orthodox' | 'southpaw';
-  mode: 'arcade' | 'competitive';
+  mode: GameMode;
   points: [number, number];
   gamjeom: [number, number];
   /** Gam-jeom across the whole match (Art. 14 cumulative limit). */
@@ -50,12 +52,52 @@ export interface Settings {
   pwaHintDismissed: boolean;
   /** Competitive round length (s): 60, 90 (default) or 120 (WT senior standard). */
   compRoundSeconds: 60 | 90 | 120;
+  /** Touch controls: idle opacity (0.35–1) and size (0.85–1.25). */
+  controlOpacity: number;
+  controlScale: number;
+  /** Mirror the touch layout: techniques on the left, joystick on the right. */
+  leftHanded: boolean;
+  /** Lock-on camera drifts to a side view when you are not steering it. */
+  cameraAssist: boolean;
+  /** Comfort: reduce camera shake / hit flashes. */
+  reduceShake: boolean;
+  reduceFlash: boolean;
+  /** Audio channels (0–1) and mute. `volume` is the master level. */
+  sfxVolume: number;
+  ambientVolume: number;
+  muted: boolean;
 }
+
+export const DEFAULT_SETTINGS: Settings = {
+  quality: 'auto',
+  showPerf: false,
+  volume: 0.8,
+  forceTouch: false,
+  controlScheme: 'compact',
+  selectedKick: 'round',
+  pwaHintDismissed: false,
+  compRoundSeconds: 90,
+  controlOpacity: 0.7,
+  controlScale: 1,
+  leftHanded: false,
+  cameraAssist: true,
+  reduceShake: false,
+  reduceFlash: false,
+  sfxVolume: 1,
+  ambientVolume: 0.5,
+  muted: false,
+};
 
 const SETTINGS_KEY = 'dojang.settings.v1';
 
 function loadSettings(): Settings {
-  const def: Settings = { quality: 'auto', showPerf: false, volume: 0.8, forceTouch: false, controlScheme: 'compact', selectedKick: 'round', pwaHintDismissed: false, compRoundSeconds: 90 };
+  const def: Settings = { ...DEFAULT_SETTINGS };
+  // Respect the OS reduced-motion preference on first run.
+  try {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) def.reduceShake = def.reduceFlash = true;
+  } catch {
+    /* no matchMedia */
+  }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };
@@ -68,7 +110,7 @@ function loadSettings(): Settings {
 interface GameStore {
   screen: 'menu' | 'match';
   difficulty: Difficulty;
-  mode: 'arcade' | 'competitive';
+  mode: GameMode;
   paused: boolean;
   loading: boolean;
   loadError: string | null;
@@ -76,7 +118,7 @@ interface GameStore {
   toasts: Toast[];
   perf: PerfSnapshot | null;
   settings: Settings;
-  startMatch(d: Difficulty, mode?: 'arcade' | 'competitive'): void;
+  startMatch(d: Difficulty, mode?: GameMode): void;
   toMenu(): void;
   setPaused(p: boolean): void;
   setHud(h: HudState): void;

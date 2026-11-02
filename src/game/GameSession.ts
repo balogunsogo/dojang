@@ -39,7 +39,7 @@ export interface SessionOptions {
   callbacks: SessionCallbacks;
 }
 
-export type MatchMode = 'arcade' | 'competitive';
+export type MatchMode = 'arcade' | 'competitive' | 'training';
 
 interface Prev {
   x: number;
@@ -113,6 +113,21 @@ export class GameSession {
     this.world.resetMatch();
     this.syncPrev();
     this.lastPhase = '';
+  }
+
+  private shakeScale = 1;
+  private lastSteps = [0, 0];
+  private staminaWarned = false;
+
+  /** Comfort and camera preferences (applied live from settings). */
+  setPrefs(p: { cameraAssist: boolean; reduceShake: boolean; reduceFlash: boolean }) {
+    this.camRig.assist = p.cameraAssist;
+    this.shakeScale = p.reduceShake ? 0.15 : 1;
+    if (this.fx) this.fx.reduced = p.reduceFlash;
+  }
+
+  private shake(amount: number) {
+    this.camRig.addShake(amount * this.shakeScale);
   }
 
   /** Competitive rules instance (null in Arcade). */
@@ -191,6 +206,7 @@ export class GameSession {
       this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], w.hitstop > 0 || this.paused ? 0 : dt);
     });
     const t2 = performance.now();
+    this.audioCues();
 
     const el = this.o.gl.domElement;
     this.camRig.update(this.o.camera, dt, p.x, p.z, o.x, o.z, el.clientWidth, el.clientHeight);
@@ -209,6 +225,23 @@ export class GameSession {
       const newDpr = this.dynRes.update(0.5, this.perf.avgMs, window.devicePixelRatio || 1);
       if (newDpr !== null) this.o.gl.setPixelRatio(newDpr);
     }
+  }
+
+  /** Footsteps and the low-stamina warning. */
+  private audioCues() {
+    for (let i = 0; i < 2; i++) {
+      const n = this.anims[i].steps;
+      if (n !== this.lastSteps[i]) {
+        this.lastSteps[i] = n;
+        audio.footstep(i === 0 ? 1 : 0.6);
+      }
+    }
+    const p = this.world.fighters[0];
+    if (this.world.phase === 'fight' && p.stamina < 15 && !this.staminaWarned) {
+      this.staminaWarned = true;
+      audio.staminaWarning();
+      this.o.callbacks.onToast({ text: 'Low stamina', sub: 'Step back and breathe', side: 0, kind: 'info' }, 1200);
+    } else if (p.stamina > 35) this.staminaWarned = false;
   }
 
   private syncPrevPositions() {
@@ -244,7 +277,7 @@ export class GameSession {
         const heavy = e.counter || e.zone === 'head' || e.move.pushback > 3;
         audio.hit(e.zone, heavy);
         this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
-        this.camRig.addShake(heavy ? 0.07 : 0.035);
+        this.shake(heavy ? 0.07 : 0.035);
         if (e.valid !== undefined) {
           // Competitive: say exactly what scored, or why it did not.
           if (e.valid) {
@@ -265,7 +298,7 @@ export class GameSession {
         break;
       case 'ko':
         toast({ text: 'K.O.', side: e.fighter === 0 ? 1 : 0, kind: 'call' }, 2000);
-        this.camRig.addShake(0.1);
+        this.shake(0.1);
         break;
       case 'round-start':
         audio.bell(1);
@@ -288,7 +321,8 @@ export class GameSession {
         toast({ text: 'Kal-yeo!', sub: e.reason, side: null, kind: 'call' }, 900);
         break;
       case 'down':
-        this.camRig.addShake(0.06);
+        audio.thud();
+        this.shake(0.06);
         if (e.cause === 'knockdown') toast({ text: 'Knockdown', sub: `${this.defs[e.fighter].short} is down`, side: null, kind: 'call' }, 1400);
         break;
       case 'match-end':
