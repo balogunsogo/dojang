@@ -66,6 +66,7 @@ export function SettingsPanel({ compact = false }: { compact?: boolean }) {
               <option value="high">High</option>
             </select>
           </label>
+          {toggle('menuScene', 'Animated menu background', 'off shows a still backdrop and saves battery')}
           {toggle('showPerf', 'Performance overlay')}
         </fieldset>
       )}

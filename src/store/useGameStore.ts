@@ -80,6 +80,8 @@ export interface Settings {
   sfxVolume: number;
   ambientVolume: number;
   muted: boolean;
+  /** Live 3D dojang behind the main menu (off = still backdrop). */
+  menuScene: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -100,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sfxVolume: 1,
   ambientVolume: 0.5,
   muted: false,
+  menuScene: true,
 };
 
 const SETTINGS_KEY = 'dojang.settings.v1';

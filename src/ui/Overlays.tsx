@@ -55,18 +55,27 @@ export function ResultOverlay({ session }: { session: GameSession }) {
   return (
     <div className="overlay result" data-testid="result">
       <div className={`panel ${comp ? 'wide' : ''}`}>
+        <p className="eyebrow">{comp ? 'Competitive' : 'Arcade'} · Match over</p>
         <h2 className={w === 0 ? 'win' : w === 1 ? 'lose' : ''}>{title}</h2>
-        <p>
-          Rounds {hud.wins[0]} – {hud.wins[1]}
-        </p>
-        <p className="muted">{w === null ? 'Even match.' : `${hud.names[w]} takes the match.`}</p>
+        <div className="scoreline" aria-label={`Rounds ${hud.wins[0]} to ${hud.wins[1]}`}>
+          <span className={`nm chung ${w === 0 ? 'won' : ''}`}>{hud.names[0]}</span>
+          <span className="sc">
+            {hud.wins[0]}
+            <i>–</i>
+            {hud.wins[1]}
+          </span>
+          <span className={`nm hong ${w === 1 ? 'won' : ''}`}>{hud.names[1]}</span>
+        </div>
+        <p className="muted">{w === null ? 'Even match.' : `${hud.names[w]} takes the match${comp ? '' : ` · rounds won ${hud.wins[w]} of ${hud.round}`}.`}</p>
         {comp && <CompetitiveSummary session={session} />}
-        <button className="primary" onClick={() => session.rematch()} data-testid="rematch">
-          Rematch
-        </button>
-        <button onClick={toMenu} data-testid="to-menu">
-          Main menu
-        </button>
+        <div className="actions">
+          <button className="primary" onClick={() => session.rematch()} data-testid="rematch" autoFocus>
+            Rematch
+          </button>
+          <button onClick={toMenu} data-testid="to-menu">
+            Main menu
+          </button>
+        </div>
       </div>
     </div>
   );

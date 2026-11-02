@@ -574,8 +574,9 @@ if (runs('competitive')) {
   })();
   // Menu: choose Competitive Sparring, then a difficulty.
   await page.click('[data-testid=mode-competitive]');
-  await page.selectOption('[data-testid=round-length]', '120');
-  await page.click('[data-testid=start-normal]');
+  await page.click('[data-testid=round-120]');
+  await page.click('[data-testid=opp-normal]');
+  await page.click('[data-testid=start-match]');
   await page.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
   await waitPhase(page, 'fight');
   const len = await page.evaluate(() => window.__dojang.session.competitive.cfg.roundSeconds);

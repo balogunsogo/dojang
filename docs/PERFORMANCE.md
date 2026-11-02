@@ -60,6 +60,18 @@ See PHASE_2.md §G. Arcade UI coverage is unchanged (13.6–17.6%). Competitive 
 
 See RELEASE_CANDIDATE.md §3. Same SwiftShader environment: draw calls 20–22 (unchanged budget use; the training equipment is merged into the static mesh), ~29.8k triangles, simulation 0.09–0.17 ms and animation 0.55–0.69 ms per frame (busy container), UI coverage 13.6–17.6%. App chunk 78.3 → 88.4 KB gzipped, CSS 3.7 → 6.2 KB. No new textures, shaders or asset files. FPS from this environment is not reported because it is not representative.
 
+## Phase 7: menu scene
+
+The live menu backdrop (`MenuStage`) uses one WebGL context and is disposed with `forceContextLoss()` before the match canvas mounts; the smoke check confirms exactly one canvas during play. Its costs:
+- **Frame rate:** capped at 30 FPS.
+- **Pixel ratio:** capped at 1.5, 1.25 or 1 depending on tier.
+- **Shadows:** high tier only.
+- **Dust:** 160 points (70 on low), one draw call.
+
+It loads the same cached `fighter.glb`, so the match starts from cache. Fallbacks: the Settings › Graphics › "Animated menu background" toggle (off = a CSS still), and `?nomenu3d`.
+
+Bundle growth: App chunk 88.4 → 92.6 KB gzipped, CSS 6.2 → 9.2 KB. No new assets or dependencies. The gameplay HUD keeps the same sizes, so phone UI coverage is unchanged.
+
 ## Not yet verified
 
 - **No real-device testing has been done.** Nothing has run on a physical iPhone, an Android phone or a desktop GPU. The 60/30 FPS targets are unverified.

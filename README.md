@@ -2,7 +2,7 @@
 
 A semi-realistic 3D Taekwondo sparring game for desktop and mobile browsers. Built with TypeScript, React, Vite, Three.js and React Three Fiber.
 
-![Roundhouse kick, desktop](docs/media/desktop-roundhouse.jpg)
+![Main menu over the live dojang](docs/media/phase7/after-home-desktop.jpg)
 
 ## Status
 
@@ -83,6 +83,6 @@ The fighter mesh, skeleton and hit/knockdown/idle clips are from Quaternius's **
 
 ## Docs
 
-[Game design](docs/GAME_DESIGN.md) · [Architecture](docs/ARCHITECTURE.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) · [Asset manifest](docs/ASSET_MANIFEST.md) · [Performance](docs/PERFORMANCE.md) · [Decisions](docs/DECISIONS.md) · [Handoff](docs/HANDOFF.md)
+[Game design](docs/GAME_DESIGN.md) · [Architecture](docs/ARCHITECTURE.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) · [Asset manifest](docs/ASSET_MANIFEST.md) · [Performance](docs/PERFORMANCE.md) · [Decisions](docs/DECISIONS.md) · [Design system](docs/DESIGN_SYSTEM.md) · [Release candidate](docs/RELEASE_CANDIDATE.md) · [Handoff](docs/HANDOFF.md)
 
 DOJANG is a game. Its rules and belt milestones are game systems, not official World Taekwondo rules or grading.
