@@ -48,7 +48,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 
 /** Competition colors: chung (blue) and hong (red) trunk protectors/headgear. */
 export const CORNER_COLORS = { chung: '#1f4fb8', hong: '#c42b2b' } as const;
-export const BELT_COLORS = { white: '#f2f2ee', yellow: '#e8c12c', green: '#2f8f3a', black: '#141414' } as const;
+export const BELT_COLORS = { white: '#f2f2ee', yellow: '#e8c12c', green: '#2f8f3a', red: '#b8322c', black: '#141414' } as const;
 export type BeltColor = keyof typeof BELT_COLORS;
 
 let gltfPromise: Promise<GLTF> | null = null;
@@ -180,6 +180,17 @@ function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: '
       c.copy(skin);
     } else {
       c.copy(dobok);
+      // Sleeve and trouser hems read as a slightly heavier fabric band.
+      const hem = (/forearm/.test(bone) && Math.abs(p.x) > 0.62) || (/shin/.test(bone) && p.y < 0.2);
+      if (hem) c.multiplyScalar(0.86);
+    }
+    // Dobok fabric: soft vertical folds on the trousers and sleeves, and a
+    // darker V-neck lapel edge (vertex colors only: no textures, no draw calls).
+    if (c.equals(dobok) || c.equals(dobokShade)) {
+      const fold = 0.93 + 0.07 * (0.5 + 0.5 * Math.sin(p.x * 61 + p.z * 23)) * (0.6 + 0.4 * Math.sin(p.y * 9));
+      c.multiplyScalar(fold);
+      const lapel = /spine/.test(bone) && p.z > 0.04 && p.y > 1.36 && Math.abs(Math.abs(p.x) - (p.y - 1.36) * 0.9) < 0.022;
+      if (lapel) c.multiplyScalar(0.78);
     }
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;

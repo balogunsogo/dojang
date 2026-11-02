@@ -503,6 +503,11 @@ export class FighterAnimator {
     this.b.hips.position.lerpVectors(this.snapHips, this.b.hips.position, w);
   }
 
+  /** Footsteps taken so far (drives footstep sounds). */
+  get steps(): number {
+    return this.planner.steps;
+  }
+
   /** Current world position of a named bone (FX, camera, debug). */
   boneWorld(name: keyof typeof BONE, out: THREE.Vector3) {
     return this.b[name].getWorldPosition(out);

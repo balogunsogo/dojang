@@ -16,6 +16,8 @@ export class CameraRig {
   pitch = 0.2;
   zoom = 0;
   lockOn = true;
+  /** Framing assistance: drift to the side view when the player is not steering. */
+  assist = true;
   /** Seconds since the player last moved the camera. */
   private idle = 10;
   private readonly focus = new THREE.Vector3(0, 1.1, 0);
@@ -31,8 +33,13 @@ export class CameraRig {
   private viewW = 0;
   private viewH = 0;
 
+  private punch = 0;
+  private baseFov = 0;
+
   addShake(amount: number) {
     this.shake = Math.min(0.12, this.shake + amount);
+    // Heavy impacts also give a brief, subtle zoom "punch" (scales with shake, so the comfort setting reduces it too).
+    this.punch = Math.min(1, this.punch + amount * 12);
   }
 
   input(dYaw: number, dPitch: number, dZoom: number) {
@@ -68,7 +75,7 @@ export class CameraRig {
       const dx = nz * c + nx * k;
       const dz = -nx * c + nz * k;
       const desired = Math.atan2(dx, dz);
-      const assist = this.idle > 1.2 ? 1 - Math.exp(-dt * 2.2) : 0;
+      const assist = this.assist && this.idle > 1.2 ? 1 - Math.exp(-dt * 2.2) : 0;
       if (!this.initialized) {
         this.yaw = desired;
         this.initialized = true;
@@ -102,6 +109,12 @@ export class CameraRig {
       this.shake *= Math.exp(-dt * 14);
     }
     cam.lookAt(this.focus);
+    if (!this.baseFov) this.baseFov = cam.fov;
+    if (this.punch > 0.002 || cam.fov !== this.baseFov) {
+      this.punch *= Math.exp(-dt * 10);
+      cam.fov = this.baseFov - this.punch * 2.2;
+      cam.updateProjectionMatrix();
+    }
     this.applyViewOffset(cam, vw, vh);
   }
 

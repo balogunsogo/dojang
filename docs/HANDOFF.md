@@ -1,5 +1,13 @@
 # Handoff
 
+> **Phases 3–6 are complete as a release candidate** on `claude/amazing-galileo-4k6k1j` (draft PR balogunsogo/dojang#5, base `main` 470ba0b). Read **[RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)** first: it lists what shipped per phase, verification (tsc clean, 105/105 unit, build OK, 71/71 e2e on 2026-11-02), performance, known issues and the human UAT checklist.
+> - Commits: Phase 3 6b13725, Phase 4 d1fb357, Phase 5 5479f7b, Phase 6 (docs and release review).
+> - Next steps: human UAT on real devices and browsers (RELEASE_CANDIDATE.md §7); then, if approved, mark PR #5 ready and merge. Production deploy is **not authorized** yet.
+> - Deferred: hybrid gesture controls, onboarding tutorial, bow/victory poses, offline (service worker).
+> - Run one e2e section: `E2E_ONLY=training node scripts/e2e.mjs http://localhost:4173/` after `npm run build && npx vite preview --port 4173`.
+
+The rest of this file describes the Phase 2 rules corrections (PR #4, merged).
+
 _Last updated: Phase 2 rules corrections after the review of PR #3 (2026-11-01)._
 
 ## Branches and pull requests

@@ -1,7 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { audio } from '../game/audio/AudioEngine';
 import { GameSession } from '../game/GameSession';
 import { InputManager } from '../game/input/InputManager';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
@@ -11,6 +10,7 @@ import { PauseMenu, ResultOverlay } from './Overlays';
 import { PerfOverlay } from './PerfOverlay';
 import { RotatePrompt } from './RotatePrompt';
 import { TouchControls } from './TouchControls';
+import { PromotionOverlay, TrainingHudView, TrainingSummary } from './Training';
 
 declare global {
   interface Window {
@@ -24,6 +24,8 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
   const difficulty = useGameStore((s) => s.difficulty);
   const quality = useGameStore((s) => s.settings.quality);
   const mode = useGameStore((s) => s.mode);
+  const activity = useGameStore((s) => s.activity);
+  const fighter = useGameStore((s) => s.progress.fighter);
 
   useEffect(() => {
     const st = useGameStore.getState();
@@ -38,7 +40,13 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
       aiEnabled: params.get('ai') !== 'off',
       mode: useGameStore.getState().mode,
       roundSeconds: useGameStore.getState().settings.compRoundSeconds,
+      playerCharacter: st.progress.fighter,
+      playerBelt: st.progress.belt,
+      activity: st.activity,
       callbacks: {
+        onTrainingHud: (h) => useGameStore.getState().setTrainingHud(h),
+        onTrainingEnd: (r) => useGameStore.getState().finishTraining(r),
+        onMatchEnd: (won) => useGameStore.getState().recordMatchResult(won),
         onHud: (h) => useGameStore.getState().setHud(h),
         onToast: (t, ms) => useGameStore.getState().pushToast(t, ms),
         onPerf: (p) => useGameStore.getState().setPerf(p),
@@ -70,7 +78,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
     };
     // Session is rebuilt only when the match configuration changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, quality, mode]);
+  }, [difficulty, quality, mode, activity, fighter]);
 
   const paused = useGameStore((s) => s.paused);
   useEffect(() => {
@@ -87,13 +95,14 @@ export function MatchScreen() {
   const settings = useGameStore((s) => s.settings);
   const loading = useGameStore((s) => s.loading);
   const loadError = useGameStore((s) => s.loadError);
+  const mode = useGameStore((s) => s.mode);
   const profile = useMemo(() => resolveQuality(settings.quality), [settings.quality]);
   const touch = useMemo(() => isTouchDevice(), []);
   const showTouch = touch || settings.forceTouch || new URLSearchParams(location.search).get('touch') === '1';
 
   useEffect(() => {
-    audio.setVolume(settings.volume);
-  }, [settings.volume]);
+    session?.setPrefs({ cameraAssist: settings.cameraAssist, reduceShake: settings.reduceShake, reduceFlash: settings.reduceFlash });
+  }, [session, settings.cameraAssist, settings.reduceShake, settings.reduceFlash]);
 
   // Tell the camera how much of the screen the HUD and touch controls cover,
   // so it frames both fighters inside the unobstructed region.
@@ -135,11 +144,24 @@ export function MatchScreen() {
         <SessionDriver input={input} onReady={setSession} />
       </Canvas>
       {loading && <div className="loading">Entering the dojang…</div>}
-      {loadError && <div className="loading error">Could not load fighters: {loadError}</div>}
-      {session && <Hud />}
+      {loadError && (
+        <div className="loading error" role="alert">
+          <p>Could not load the fighters. Check your connection and try again.</p>
+          <p className="muted small">{loadError}</p>
+          <div className="row">
+            <button className="primary" onClick={() => location.reload()}>
+              Retry
+            </button>
+            <button onClick={() => useGameStore.getState().toMenu()}>Back to menu</button>
+          </div>
+        </div>
+      )}
+      {session && (mode === 'training' ? <TrainingHudView /> : <Hud />)}
       {session && showTouch && <TouchControls input={input} />}
       {session && <PauseMenu session={session} />}
-      {session && <ResultOverlay session={session} />}
+      {session && mode !== 'training' && <ResultOverlay session={session} />}
+      {session && mode === 'training' && <TrainingSummary session={session} />}
+      <PromotionOverlay />
       {settings.showPerf && <PerfOverlay />}
       {touch && <RotatePrompt />}
     </div>

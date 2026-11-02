@@ -104,6 +104,13 @@ Both the strike-point sweep in the simulation and the IK ankle targets in animat
 - Quality tiers control the DPR cap, shadows, shadow map size and MSAA. A dynamic-resolution controller adjusts DPR from measured frame time.
 - GPU cleanup: `GameSession.dispose()` releases character geometry and materials, environment geometry, materials and textures, instanced meshes and FX. It runs on unmount, so leaving a match frees GPU resources.
 
+## Training and progression (Phase 4)
+
+- `src/game/training/`: `activities.ts` (data), `TrainingRules` (an open-ended `Ruleset` whose `judgeContact` reuses the competitive `validateContact`), and `TrainingController` (reads the same combat events as a match, tracks attempts/hits/combos/drill steps, and drives the partner, fighter 1, through `partnerIntent`). `GameSession` runs it after each fixed step and forwards feedback to toasts and audio.
+- `src/game/progress/progress.ts`: pure, versioned progress model (`migrate`, `recordTraining`, `recordMatch`, `checkPromotion`, `BELT_REQUIREMENTS`). Storage is injected, so tests cover corrupt and refused saves.
+- The store's `commitProgress` checks promotion, saves, and surfaces `saveFailed` and `promotion` to the UI.
+- Settings (`dojang.settings.v1`) feed `GameSession.setPrefs` (camera assist, shake, flashes) and `audio.setMix` (master/sfx/ambient buses, mute).
+
 ## Testing strategy
 
 - **Vitest** for pure logic: frame data, the state machine, hit geometry, guard, counter hits, round and match flow, AI behavior differences, IK accuracy, pose and impact agreement, input latching.

@@ -422,6 +422,138 @@ if (runs('pwa')) {
   await ctx.close();
 }
 
+// ------------------------------------- Phase 3 gate: full match by touch only
+if (runs('mobile-gate')) {
+  const { ctx, page, errors } = await open(PHONE, '?start=normal&ai=off', { leftHanded: true, controlScale: 1.1, controlOpacity: 0.5 });
+  await waitPhase(page, 'fight');
+  const { touch, center, setRange, idle, lastAttack } = await touchKit(ctx, page);
+  const vw = PHONE.viewport.width;
+  const kick = await center('[data-testid=kick-main]');
+  check('mobile gate: left-handed layout puts the Kick button on the left', kick.x < vw / 2, `x ${Math.round(kick.x)}`);
+  // Mirrored wheel: slide toward the screen centre (right) to reach Side.
+  await setRange(1.15);
+  await touch('touchStart', [{ id: 1, ...kick }]);
+  await touch('touchMove', [{ id: 1, x: kick.x + 60, y: kick.y - 20 }]);
+  await touch('touchMove', [{ id: 1, x: kick.x + 110, y: kick.y - 36 }]);
+  await touch('touchEnd', []);
+  await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'attack', null, { timeout: 10000 }).catch(() => {});
+  check('mobile gate: mirrored wheel selects Side', (await lastAttack()).id === 'side');
+  await idle();
+  // Pause and resume by touch.
+  const pause = await center('[aria-label="Pause"]');
+  await touch('touchStart', [{ id: 2, ...pause }]);
+  await touch('touchEnd', []);
+  await page.waitForSelector('text=Paused', { timeout: 5000 }).catch(() => {});
+  const resume = await center('text=Resume');
+  check('mobile gate: pause button opens the pause menu', !!resume);
+  if (resume) {
+    await touch('touchStart', [{ id: 3, ...resume }]);
+    await touch('touchEnd', []);
+  }
+  await page.waitForSelector('text=Paused', { state: 'detached', timeout: 5000 }).catch(() => {});
+  check('mobile gate: Resume by touch continues the match', !(await page.$('text=Paused')));
+  // Finish the match by touch: two knockouts (health lowered to keep the test short).
+  for (let r = 0; r < 2; r++) {
+    await page.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+    await setRange(1.0);
+    await page.evaluate(() => (window.__dojang.session.world.fighters[1].health = 3));
+    const k = await center('[data-testid=kick-main]');
+    await touch('touchStart', [{ id: 4, ...k }]);
+    await touch('touchEnd', []);
+    await page.waitForFunction(() => ['round-over', 'match-over'].includes(window.__dojang.session.world.phase), null, { timeout: 20000 }).catch(() => {});
+  }
+  await page.waitForSelector('[data-testid=rematch]', { timeout: 30000 }).catch(() => {});
+  const rm = await center('[data-testid=rematch]');
+  check('mobile gate: match finished by touch shows the result', !!rm);
+  if (rm) {
+    await touch('touchStart', [{ id: 5, ...rm }]);
+    await touch('touchEnd', []);
+    await page.waitForFunction(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.fighters[1].health === 100, null, { timeout: 10000 }).catch(() => {});
+  }
+  check('mobile gate: Rematch by touch restarts', await page.evaluate(() => window.__dojang.session.world.round === 1 && window.__dojang.session.world.matchWinner === null));
+  if (shots) await page.screenshot({ path: `${shots}/mobile-lefty.jpg`, type: 'jpeg', quality: 80 });
+  check('mobile gate: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
+// -------------------- Phase 4 gate: fighter, training, belt, persistence
+if (runs('training')) {
+  const ctx = await browser.newContext({ viewport: { width: 1024, height: 600 } });
+  await ctx.addInitScript(() => {
+    try {
+      if (sessionStorage.getItem('e2e-init')) return;
+      sessionStorage.setItem('e2e-init', '1');
+      localStorage.setItem('dojang.settings.v1', JSON.stringify({ quality: 'low', volume: 0 }));
+      // Seed progress: everything for Yellow except the Body kick challenge.
+      localStorage.setItem('dojang.progress.v1', JSON.stringify({ version: 1, fighter: 'jae', belt: 'white', completed: ['practice'], records: {}, landed: { front: 1, round: 1, side: 1, punch: 1 }, matches: { played: 1, won: 1, wins: { easy: 1, normal: 0, hard: 0 } } }));
+    } catch {}
+  });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(base);
+  // 1. Select a fighter.
+  await page.click('[data-testid=open-fighter]');
+  await page.click('[data-testid=fighter-hana]');
+  await page.click('[data-testid=menu-back]');
+  check('training: fighter selection updates the home card', /Park Ha-na/.test(await page.textContent('[data-testid=current-fighter]')));
+  // 2. Body kick challenge.
+  await page.click('[data-testid=mode-training]');
+  await page.click('[data-testid=activity-body10]');
+  await page.waitForFunction(() => window.__dojang?.session?.ready && window.__dojang.session.training, null, { timeout: 90000 });
+  const who = await page.evaluate(() => window.__dojang.session.defs[0].id);
+  check('training: the selected fighter is the one you control', who === 'hana', who);
+  const kick = async (key) => {
+    const s0 = await page.evaluate(() => window.__dojang.session.world.fighters[0].attackSerial);
+    await page.evaluate(() => {
+      const [a, b] = window.__dojang.session.world.fighters;
+      a.x = 0; a.z = -0.5; a.yaw = 0; b.x = 0; b.z = 0.5; b.yaw = Math.PI; a.stamina = 100;
+    });
+    await page.keyboard.press(key);
+    await page.waitForFunction((s) => window.__dojang.session.world.fighters[0].attackSerial > s, s0, { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => window.__dojang.session.world.fighters[0].state === 'idle', null, { timeout: 15000 }).catch(() => {});
+  };
+  for (let i = 0; i < 14; i++) {
+    if (await page.evaluate(() => window.__dojang.session.training.finished)) break;
+    await kick('KeyL');
+  }
+  const t1 = await page.evaluate(() => ({ done: window.__dojang.session.training.done, hits: window.__dojang.session.training.hits }));
+  check('training: Body kick challenge completed with real hits', t1.done && t1.hits >= 10, JSON.stringify(t1));
+  // 3. Belt promotion.
+  const promo = await page.waitForSelector('[data-testid=promotion]', { timeout: 10000 }).catch(() => null);
+  check('training: completing the last milestone earns the Yellow belt', !!promo);
+  if (shots && promo) await page.screenshot({ path: `${shots}/belt-promotion.jpg`, type: 'jpeg', quality: 80 });
+  if (promo) await page.click('[data-testid=promotion-ok]');
+  await page.waitForSelector('[data-testid=training-summary]', { timeout: 10000 }).catch(() => {});
+  if (shots) await page.screenshot({ path: `${shots}/training-summary.jpg`, type: 'jpeg', quality: 80 });
+  check('training: summary shows accuracy and next belt requirements', /accuracy/.test(await page.textContent('[data-testid=training-summary]')) && !!(await page.$('[data-testid=belt-reqs]')));
+  // 4. Combination drill (front kick → roundhouse) via the Training menu.
+  await page.click('text=Training menu');
+  await page.click('[data-testid=activity-combo-front-round]');
+  await page.waitForFunction(() => window.__dojang?.session?.ready && window.__dojang.session.training?.activity.id === 'combo-front-round', null, { timeout: 90000 });
+  for (let r = 0; r < 3; r++) {
+    await kick('KeyK');
+    await kick('KeyL');
+  }
+  if (shots) await page.screenshot({ path: `${shots}/training-drill.jpg`, type: 'jpeg', quality: 80 });
+  const t2 = await page.evaluate(() => ({ done: window.__dojang.session.training.done, reps: window.__dojang.session.training.reps }));
+  check('training: Front kick → Roundhouse drill completed (3 reps)', t2.done && t2.reps === 3, JSON.stringify(t2));
+  // 5. Back to menu, 6. reload: progress retained.
+  await page.waitForSelector('[data-testid=training-summary]', { timeout: 10000 }).catch(() => {});
+  await page.click('[data-testid=training-summary] >> text=Main menu');
+  const chip = await page.textContent('.home-fighter .belt-chip');
+  check('training: menu shows the new belt', /Yellow/.test(chip ?? ''), chip);
+  await page.reload();
+  await page.waitForSelector('[data-testid=current-fighter]');
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('dojang.progress.v1')));
+  const chip2 = await page.textContent('.home-fighter .belt-chip');
+  check('training: reload keeps belt, fighter and completed activities', after.belt === 'yellow' && after.fighter === 'hana' && after.completed.includes('body10') && after.completed.includes('combo-front-round') && /Yellow/.test(chip2 ?? '') && /Park Ha-na/.test(await page.textContent('[data-testid=current-fighter]')), JSON.stringify({ belt: after.belt, fighter: after.fighter, completed: after.completed }));
+  if (shots) await page.screenshot({ path: `${shots}/menu-home.jpg`, type: 'jpeg', quality: 80 });
+  check('training: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  await ctx.close();
+}
+
 // ------------------------------------------------ competitive: full match
 if (runs('competitive')) {
   const { ctx, page, errors } = await (async () => {
