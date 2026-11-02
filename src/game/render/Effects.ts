@@ -61,12 +61,42 @@ export class Effects {
     mat.color.copy((kind === 'block' ? this.flashMatBlock : this.flashMatHit).color);
   }
 
+  /** Training target marker (created on first use: one extra draw call in training only). */
+  private target: THREE.Mesh | null = null;
+  private targetPulse = 0;
+
+  /** Show a pulsing target ring on the partner's head or trunk protector (null hides it). */
+  setTarget(zone: 'body' | 'head' | null, x: number, z: number, yaw: number) {
+    if (!zone) {
+      if (this.target) this.target.visible = false;
+      return;
+    }
+    if (!this.target) {
+      this.target = new THREE.Mesh(
+        new THREE.RingGeometry(0.11, 0.15, 32),
+        new THREE.MeshBasicMaterial({ color: '#f4d35e', transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }),
+      );
+      this.target.renderOrder = 11;
+      this.group.add(this.target);
+    }
+    // Slightly in front of the partner, on the side facing the player.
+    const fwd = 0.24;
+    this.target.position.set(x + Math.sin(yaw) * fwd, zone === 'head' ? 1.6 : 1.12, z + Math.cos(yaw) * fwd);
+    this.target.scale.setScalar(zone === 'head' ? 0.8 : 1.25);
+    this.target.visible = true;
+  }
+
   /** Out-of-bounds feedback: the boundary line flashes red briefly. */
   flashBoundary() {
     this.boundaryFlash = 1.2;
   }
 
   update(dt: number, camera: THREE.Camera, fighters: { x: number; z: number }[]) {
+    if (this.target?.visible) {
+      this.targetPulse += dt;
+      this.target.quaternion.copy(camera.quaternion);
+      (this.target.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.3 * Math.sin(this.targetPulse * 5);
+    }
     if (this.boundaryMat) {
       if (this.boundaryFlash > 0) this.boundaryFlash = Math.max(0, this.boundaryFlash - dt);
       const k = this.boundaryFlash > 0 ? 0.5 + 0.5 * Math.sin(this.boundaryFlash * 18) : 0;
@@ -89,6 +119,10 @@ export class Effects {
   }
 
   dispose() {
+    if (this.target) {
+      this.target.geometry.dispose();
+      (this.target.material as THREE.Material).dispose();
+    }
     this.boundary?.geometry.dispose();
     this.boundaryMat?.dispose();
     this.flashGeo.dispose();

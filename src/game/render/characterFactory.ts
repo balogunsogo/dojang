@@ -48,7 +48,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 
 /** Competition colors: chung (blue) and hong (red) trunk protectors/headgear. */
 export const CORNER_COLORS = { chung: '#1f4fb8', hong: '#c42b2b' } as const;
-export const BELT_COLORS = { white: '#f2f2ee', yellow: '#e8c12c', green: '#2f8f3a', black: '#141414' } as const;
+export const BELT_COLORS = { white: '#f2f2ee', yellow: '#e8c12c', green: '#2f8f3a', red: '#b8322c', black: '#141414' } as const;
 export type BeltColor = keyof typeof BELT_COLORS;
 
 let gltfPromise: Promise<GLTF> | null = null;

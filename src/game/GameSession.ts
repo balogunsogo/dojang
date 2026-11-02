@@ -9,12 +9,16 @@ import { type ActionState, emptyIntent, type FighterIntent } from './input/actio
 import type { InputManager } from './input/InputManager';
 import { approachAngle, wrapAngle } from './math';
 import { PerfMonitor } from './perf/PerfMonitor';
-import { CHARACTERS, type CharacterDef, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
+import { type BeltColor, CHARACTERS, type CharacterDef, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
 import { buildDojang, type DojangHandle } from './render/Dojang';
 import { Effects } from './render/Effects';
 import { DynamicResolution, type QualityProfile } from './render/quality';
 import { CompetitiveRules } from './rules/competitive/CompetitiveRules';
 import { ArcadeRules, type Ruleset } from './rules/rules';
+import type { Belt, TrainingResult } from './progress/progress';
+import { activityById } from './training/activities';
+import { TrainingController, type TrainingHud } from './training/TrainingController';
+import { TrainingRules } from './training/TrainingRules';
 import type { HudState, Toast } from '../store/useGameStore';
 import type { PerfSnapshot } from './perf/PerfMonitor';
 
@@ -23,6 +27,12 @@ export interface SessionCallbacks {
   onToast(t: Omit<Toast, 'id'>, ms?: number): void;
   onPerf(p: PerfSnapshot): void;
   onPauseToggle(): void;
+  /** Training HUD snapshot (training mode only). */
+  onTrainingHud?(h: TrainingHud): void;
+  /** Training activity finished (completed, failed or ended by the player). */
+  onTrainingEnd?(r: TrainingResult): void;
+  /** Arcade/Competitive match finished; `won` is from the player's side. */
+  onMatchEnd?(won: boolean): void;
 }
 
 export interface SessionOptions {
@@ -36,8 +46,17 @@ export interface SessionOptions {
   mode: MatchMode;
   /** Competitive round length (s). */
   roundSeconds?: 60 | 90 | 120;
+  /** Fighter controlled by the player (the other one is the opponent / partner). */
+  playerCharacter?: CharacterId;
+  /** Player belt (progression), shown on the dobok. */
+  playerBelt?: Belt;
+  /** Training activity id (training mode). */
+  activity?: string;
   callbacks: SessionCallbacks;
 }
+
+/** Opponent belt by AI difficulty (presentation; matches the menu labels). */
+const AI_BELT: Record<Difficulty, BeltColor> = { easy: 'white', normal: 'red', hard: 'black' };
 
 export type MatchMode = 'arcade' | 'competitive' | 'training';
 
@@ -75,12 +94,28 @@ export class GameSession {
   ready = false;
   /** Visual yaw per fighter, smoothed toward the sim yaw. */
   private visYaw = [0, Math.PI];
-  readonly defs: [CharacterDef, CharacterDef] = [CHARACTERS.jae, CHARACTERS.hana];
+  readonly defs: [CharacterDef, CharacterDef];
+  /** Training activity controller (training mode only). */
+  training: TrainingController | null = null;
+  private trainingReported = false;
+  private matchReported = false;
 
   constructor(o: SessionOptions) {
     this.o = o;
-    const rules: Ruleset = o.mode === 'competitive' ? new CompetitiveRules(o.roundSeconds ? { roundSeconds: o.roundSeconds } : {}) : ArcadeRules;
+    const me = o.playerCharacter ?? 'jae';
+    this.defs = [CHARACTERS[me], CHARACTERS[me === 'jae' ? 'hana' : 'jae']];
+    const rules: Ruleset =
+      o.mode === 'competitive'
+        ? new CompetitiveRules(o.roundSeconds ? { roundSeconds: o.roundSeconds } : {})
+        : o.mode === 'training'
+          ? new TrainingRules()
+          : ArcadeRules;
     this.world = new CombatWorld(rules, [this.defs[0].stats, this.defs[1].stats]);
+    if (o.mode === 'training') {
+      this.training = new TrainingController(activityById(o.activity ?? 'practice'));
+      this.world.skipIntro = true;
+      this.resetTraining();
+    }
     this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
     this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
   }
@@ -91,7 +126,8 @@ export class GameSession {
     this.o.scene.add(this.env.group);
     const corners = ['chung', 'hong'] as const;
     for (let i = 0; i < 2; i++) {
-      const c = createCharacter(gltf, this.defs[i], corners[i], i === 0 ? 'green' : 'yellow');
+      const belt: BeltColor = i === 0 ? (this.o.playerBelt ?? 'white') : this.training ? 'black' : AI_BELT[this.o.difficulty];
+      const c = createCharacter(gltf, this.defs[i], corners[i], belt);
       this.o.scene.add(c.group);
       this.chars.push(c);
       this.anims.push(new FighterAnimator(c.group, c.model, c.clips, i + 1));
@@ -110,9 +146,30 @@ export class GameSession {
   }
 
   rematch() {
-    this.world.resetMatch();
+    if (this.training) {
+      this.training = new TrainingController(this.training.activity);
+      this.trainingReported = false;
+      this.resetTraining();
+    } else this.world.resetMatch();
+    this.matchReported = false;
     this.syncPrev();
     this.lastPhase = '';
+  }
+
+  /** Training: partner stands in kicking range in front of the player. */
+  private resetTraining() {
+    this.world.resetMatch();
+    const [p, partner] = this.world.fighters;
+    p.z = -0.8;
+    partner.z = 0.8;
+    this.world.events.length = 0;
+  }
+
+  /** End the current training activity now (practice has no end condition). */
+  finishTraining() {
+    if (!this.training || this.trainingReported) return;
+    this.trainingReported = true;
+    this.o.callbacks.onTrainingEnd?.(this.training.result());
   }
 
   private shakeScale = 1;
@@ -180,8 +237,9 @@ export class GameSession {
           pi.dash = false;
           pi.switchStance = false;
         }
-        const ai = this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
+        const ai = this.training ? this.training.partnerIntent(w) : this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
         w.step([pi, ai]);
+        this.trainingTick();
         if (first) this.o.input.consumeEdges();
         first = false;
         this.acc -= DT;
@@ -210,6 +268,10 @@ export class GameSession {
 
     const el = this.o.gl.domElement;
     this.camRig.update(this.o.camera, dt, p.x, p.z, o.x, o.z, el.clientWidth, el.clientHeight);
+    if (this.training && this.fx) {
+      const t = this.training;
+      this.fx.setTarget(t.finished ? null : t.target ?? (t.activity.target === 'any' ? 'body' : null), o.x, o.z, o.yaw);
+    }
     this.fx?.update(dt, this.o.camera, w.fighters);
 
     this.hudTimer -= dt;
@@ -224,6 +286,22 @@ export class GameSession {
       this.o.callbacks.onPerf(this.perf.sample(this.o.gl, this.o.quality.tier));
       const newDpr = this.dynRes.update(0.5, this.perf.avgMs, window.devicePixelRatio || 1);
       if (newDpr !== null) this.o.gl.setPixelRatio(newDpr);
+    }
+  }
+
+  /** Feed this tick's events to the training controller and surface its feedback. */
+  private trainingTick() {
+    const t = this.training;
+    if (!t) return;
+    t.update(this.world);
+    for (const f of t.feedback) {
+      audio.feedback(f.good);
+      this.o.callbacks.onToast({ text: f.text, sub: f.sub, side: null, kind: f.good ? 'score' : 'info' }, f.good ? 900 : 1100);
+    }
+    t.feedback.length = 0;
+    if (t.finished && !this.trainingReported) {
+      if (t.done) audio.fanfare();
+      this.finishTraining();
     }
   }
 
@@ -278,6 +356,7 @@ export class GameSession {
         audio.hit(e.zone, heavy);
         this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
         this.shake(heavy ? 0.07 : 0.035);
+        if (this.training) break; // training gives its own feedback
         if (e.valid !== undefined) {
           // Competitive: say exactly what scored, or why it did not.
           if (e.valid) {
@@ -326,11 +405,16 @@ export class GameSession {
         if (e.cause === 'knockdown') toast({ text: 'Knockdown', sub: `${this.defs[e.fighter].short} is down`, side: null, kind: 'call' }, 1400);
         break;
       case 'match-end':
+        if (!this.matchReported && !this.training) {
+          this.matchReported = true;
+          this.o.callbacks.onMatchEnd?.(e.winner === 0);
+        }
         break;
     }
   }
 
   private publishHud(a: ActionState) {
+    if (this.training) this.o.callbacks.onTrainingHud?.(this.training.hud());
     const w = this.world;
     const [p, o] = w.fighters;
     this.o.callbacks.onHud({

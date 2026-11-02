@@ -79,7 +79,7 @@ export interface RuleHooks {
  * decided. Both rulesets share the same combat engine.
  */
 export interface Ruleset {
-  readonly id: 'arcade' | 'competitive';
+  readonly id: 'arcade' | 'competitive' | 'training';
   readonly label: string;
   readonly roundSeconds: number;
   readonly roundsToWin: number;

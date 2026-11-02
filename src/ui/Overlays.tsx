@@ -22,8 +22,19 @@ export function PauseMenu({ session }: { session: GameSession }) {
             setPaused(false);
           }}
         >
-          Restart match
+          {session.training ? 'Restart activity' : 'Restart match'}
         </button>
+        {session.training && (
+          <button
+            onClick={() => {
+              session.finishTraining();
+              setPaused(false);
+            }}
+            data-testid="end-activity"
+          >
+            End activity &amp; see summary
+          </button>
+        )}
         <button onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings} data-testid="pause-settings">
           {showSettings ? 'Hide settings' : 'Settings'}
         </button>

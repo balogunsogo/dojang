@@ -2,6 +2,7 @@
 
 > **Phases 3–6 in progress** on `claude/amazing-galileo-4k6k1j` (branched from `main` after PR #4 merged). Checkpoints:
 > - Phase 3 (mobile completion) committed: control opacity, size and left-handed layout; camera assist and comfort toggles; shared settings panel (menu + pause); auto-pause on visibility change; audio buses and resume; WebGL and runtime error screens; wheel hold 260 → 200 ms. Gate: `E2E_ONLY=mobile-gate` 7/7.
+> - Phase 4 (training, fighter selection, belts) committed: `src/game/training/` (activities, TrainingController, TrainingRules), `src/game/progress/progress.ts` (versioned save, belt requirements), store progress slice, new menu (home, spar setup, training, fighter, progression, settings, controls), training HUD, summary, promotion screen. Gate: `E2E_ONLY=training` 9/9; `tests/training-progress.test.ts` 9/9.
 
 _Last updated: Phase 2 rules corrections after the review of PR #3 (2026-11-01)._
 
