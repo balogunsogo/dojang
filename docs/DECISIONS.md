@@ -107,3 +107,19 @@ Perception delay, read accuracy, anticipation from the observed rhythm, punish a
 ## D-022: Lead-leg kicks on the wheel's inner ring
 
 Fast techniques use the shortest thumb travel. There are no new permanent buttons. Classic gets one Rear/Lead chip. Desktop uses an F modifier; gamepad uses the D-pad.
+
+## D-025: Training reuses the combat simulation
+
+Training runs on `CombatWorld` with a `TrainingRules` ruleset rather than a separate target system, so a "valid" hit in training means exactly what it means in Competitive (validation, extension, legal zone). The partner is a normal fighter driven by `TrainingController`.
+
+## D-026: Belt progression is a local game milestone
+
+White → Yellow → Green, four milestones each, saved to versioned localStorage. Labelled in-game as a gameplay milestone, not an official grading. Higher belts are out of scope.
+
+## D-027: Left-handed layout by transform mirror
+
+Logical CSS insets did not mirror nested controls in Chromium. The touch cluster is mirrored with a transform and labels are counter-flipped; the wheel's swipe x is mirrored in input code to match.
+
+## D-028: Hybrid gesture controls deferred
+
+The Phase 3 plan listed a tap/swipe gesture mode. Compact and Classic were completed and made configurable instead; gestures need real-device tuning and are deferred until UAT feedback.

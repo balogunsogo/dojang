@@ -59,7 +59,10 @@ Details are in PHASE_2.md.
 - ⬜ Open interpretation items (HANDOFF.md)
 - ⬜ Real-device UAT
 
-## Phase 3: Complete mobile interaction ⬜
+## Phase 3: Complete mobile interaction ✅ (gestures deferred)
+
+> Delivered: control opacity/size/left-handed mirror, camera assist and comfort toggles, shared settings panel, auto-pause on interruption, failure screens. **Deferred:** the hybrid gesture recognizer (item 1) and real-device profiling (item 5). See RELEASE_CANDIDATE.md.
+
 
 1. Hybrid gesture mode on the right pad: tap = punch, swipe up = front kick, swipe toward the opponent = roundhouse, swipe away = side kick, circular swipe = back kick, two-finger tap = guard. The recognizer must ignore pointers owned by the joystick or camera. Gestures call `InputManager.press(kind, height)`, and the API already supports height.
 2. Control settings: layout scale, left-handed mirror, button opacity, mode switch (classic / hybrid).
@@ -67,7 +70,10 @@ Details are in PHASE_2.md.
 4. Orientation: handle resize and orientation changes mid-match (pause on portrait).
 5. **Real-device profiling** on at least one iOS and one Android device, following the protocol in PERFORMANCE.md.
 
-## Phase 4: Training and progression ⬜
+## Phase 4: Training and progression ✅
+
+> Delivered: nine activities (practice, four challenges, four drills) on the real simulation, fighter select, White → Yellow → Green belts, versioned save with migration, tests.
+
 
 1. Training mode scene reuse: dummy fighter (`ai=off` behavior), kicking targets (pads at body and head height), moving targets.
 2. Drills: accuracy, timed kicking, combinations (for example roundhouse → back kick), with performance summaries.
@@ -75,10 +81,16 @@ Details are in PHASE_2.md.
 4. Character select (Jae-won / Ha-na) and settings and menu polish.
 5. Tests: progression rules, save/load migration.
 
-## Phase 5: Visual and audio polish ⬜
+## Phase 5: Visual and audio polish ✅ (partial)
+
+> Delivered: audio buses and new cues, room tone, dobok shading, impact camera punch, training equipment, menu redesign and overlay polish. **Not done:** bow/victory poses, onboarding tutorial.
+
 
 Refine the dojang materials and lighting; better character shading (fabric, protector gloss); bow and victory poses; better knockdown; hit FX; impact SFX variety; onboarding tutorial.
 
-## Phase 6: Release validation ⬜
+## Phase 6: Release validation ✅ (automated) / ⏳ (human UAT)
+
+> Delivered: performance audit, one full verification pass, accessibility review, docs, RELEASE_CANDIDATE.md. **Pending:** browser matrix and real devices (human UAT); production deploy not authorized.
+
 
 Regression pass, browser matrix (Chrome, Safari, Firefox desktop; iOS Safari; Android Chrome), real-device performance checks, production build checks, deployment (static hosting; for example GitHub Pages with `base: './'`, which already works).

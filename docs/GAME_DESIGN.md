@@ -106,11 +106,16 @@ Based on the World Taekwondo Competition Rules & Interpretation in force from Ju
   - **Hard:** 8-tick reaction, frequent guard, punishes whiffs, dashes.
 
   The AI uses the same intents and frame data as the player. The presets are a first pass and get tuned in Phase 2.
-- **Training (Phase 4).** Stationary and moving targets, accuracy challenges, timed drills, combinations, technique feedback and summaries.
+- **Training (implemented in Phase 4).** Runs on the same combat simulation; a training partner holds a lit target ring. Practice (free), Challenges (Body 10 in 40 s, Head 5 in 40 s, Alternating 8 in 45 s, Moving 6 in 45 s) and Drills (Front → Roundhouse, Lead → Rear roundhouse, Side → Back kick, Block → Counter; 3 reps, order and timing enforced). Live feedback and an end summary with tips.
 
 ## Progression (Phase 4)
 
-Local belt milestones: white → yellow → green. Each belt is unlocked by specific training challenges and saved locally. This is a game progression model, not an official grading. The belt color already renders on the fighter's dobok.
+Local belt milestones: white → yellow → green (implemented). Saved in localStorage (`dojang.progress.v1`, versioned with migration). This is a game progression model, not an official grading. The belt color renders on the fighter's dobok.
+
+- **Yellow:** land a front kick, roundhouse, side kick and punch in Practice; complete the Body challenge; 60% accuracy in a challenge; win any match.
+- **Green:** complete the three combination drills; 75% accuracy in Alternating targets; complete Block → Counter; win against a Red belt (Normal) or Black belt (Hard) AI.
+
+Fighter selection (Kim Jae-won / Park Ha-na) is saved with progress.
 
 ## Touch controls
 

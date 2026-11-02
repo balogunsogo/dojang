@@ -6,7 +6,7 @@ A semi-realistic 3D Taekwondo sparring game for desktop and mobile browsers. Bui
 
 ## Status
 
-**Phases 0, 1, 1.5 and 2 are done.** Phase 2 adds WT-style Competitive sparring, lead-leg kicks and a smarter AI; see [docs/PHASE_2.md](docs/PHASE_2.md). You can spar full Arcade or Competitive matches against an AI in a 3D dojang using keyboard, gamepad or touch controls. See [docs/HANDOFF.md](docs/HANDOFF.md) for exactly what works, what was tested and what comes next.
+**Phases 0–2 are on `main`; Phases 3–6 are a release candidate in review** (see [docs/RELEASE_CANDIDATE.md](docs/RELEASE_CANDIDATE.md)). You can spar Arcade or WT-style Competitive matches against an AI, train in nine activities with live feedback, choose your fighter and earn belts from White to Green, with keyboard, gamepad or touch controls. See [docs/HANDOFF.md](docs/HANDOFF.md) for what was tested and what comes next.
 
 | Works now | Planned |
 |---|---|
@@ -17,10 +17,10 @@ A semi-realistic 3D Taekwondo sparring game for desktop and mobile browsers. Bui
 | Layered AI: white, red and black belt | |
 | Planted footwork, varied idle, outcome-aware kicks, procedural reactions | |
 | Compact and Classic touch schemes, slim HUD, optional fullscreen PWA | |
-| Frame data (startup/active/recovery), stamina, counter hits, hit stop, combos on hit | Touch gestures and hybrid control mode (Phase 3) |
-| Distance-aware hit detection, hit reactions, KO | Training drills and belt progression (Phase 4) |
-| Arcade rules: health, 60 s rounds, best of 3, result and rematch | Character select, menus polish, onboarding (Phase 4–5) |
-| Three AI presets (first pass), lock-on and free camera | Real-device performance validation (Phase 6) |
+| Frame data (startup/active/recovery), stamina, counter hits, hit stop, combos on hit | Touch gestures and hybrid control mode (deferred) |
+| Distance-aware hit detection, hit reactions, KO | Training mode, belts White → Green, fighter select ✅ |
+| Arcade rules: health, 60 s rounds, best of 3, result and rematch | Onboarding tutorial, bow/victory poses |
+| Three AI presets (first pass), lock-on and free camera | Real-device and cross-browser UAT |
 | Keyboard, gamepad, multitouch joystick and buttons, portrait prompt | |
 
 ## Run it

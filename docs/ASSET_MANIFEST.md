@@ -48,7 +48,8 @@ The procedural kicks are an intentional, documented choice: the motion is Taekwo
 |---|---|---|
 | Wood floor, dancheong frieze, changsal lattice, taegeukgi, calligraphy banner | Canvas 2D in `src/game/render/Dojang.ts` | Original work for this project. The taegeukgi is drawn from its public geometric specification. |
 | Dojang geometry, mats, beams, bags, belt rack | Three.js primitives | Original work |
-| Sound effects (whoosh, body/head impact, block, bell) | Web Audio synthesis in `src/game/audio/AudioEngine.ts` | Original work |
+| Sound effects (whoosh, body/head impact, block, bell, footsteps, UI click, training cues, fanfare, stamina warning, thud, room tone) | Web Audio synthesis in `src/game/audio/AudioEngine.ts` | Original work |
+| Training equipment (paddles, trunk protectors, mats, kick shield), target ring, dobok fabric shading | Three.js primitives and vertex colors | Original work |
 | Hit flashes, blob shadows | Three.js primitives | Original work |
 
 The banner uses system fonts (Noto Serif KR, Nanum Myeongjo, Apple SD Gothic Neo or Malgun Gothic, with a serif fallback). No font files are shipped.
