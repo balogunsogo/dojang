@@ -1,0 +1,41 @@
+/* DOJANG UI tokens — from the Developer handoff board */
+:root {
+  /* colour */
+  --ink: #15120F;
+  --surface: rgb(239 230 216 / .07);
+  --surface-hover: rgb(239 230 216 / .04);
+  --fg: #EFE6D8;
+  --muted: #A99F90;
+  --faint: #7A7166;
+  --line: rgb(239 230 216 / .12);
+  --brass: #C9A062;
+  --brass-hover: #D6AE70;
+  --on-brass: #1B140B;
+  --chung: #3C6BC4;  --chung-text: #7FA3E8;
+  --hong: #C0443A;   --hong-text: #E8806F;
+  --warn: #E07A5F;
+
+  /* type */
+  --font-display: 'Hahmlet', 'Noto Serif KR',
+    'Nanum Myeongjo', Georgia, serif;
+  --font-ui: 'IBM Plex Sans', 'IBM Plex Sans KR',
+    'Apple SD Gothic Neo', 'Malgun Gothic',
+    system-ui, sans-serif;
+
+  /* space */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px;
+  --s8: 72px; --s9: 96px;
+  --edge: clamp(24px, 6.67vw, 96px);
+  --ui-col: min(460px, 100% - 2 * var(--edge));
+
+  /* shape + motion */
+  --radius: 2px;
+  --t-fast: 120ms; --t-base: 180ms;
+  --t-screen: 240ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --scrim: linear-gradient(90deg,
+    rgb(21 18 15 / .86) 0%,
+    rgb(21 18 15 / .62) 32%,
+    rgb(21 18 15 / 0) 58%);
+}
