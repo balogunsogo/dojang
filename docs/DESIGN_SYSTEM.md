@@ -111,6 +111,47 @@ The changes are:
 - an off-white health bar;
 - toasts in Plex, inside a polite live region so score changes are announced.
 
+## Training coach (tips)
+
+`src/game/training/Coach.ts` is a small, deterministic, rules-based coach; no AI or network is involved. It only **observes**: the training controller's feedback codes, its counters, and the tick's combat events. Combat, scoring, completion and progression are unchanged.
+
+**Triggers:**
+- the activity's real objective at the start;
+- repeated misses from out of range, and attacks that are too close to score;
+- an invalid contact, or a hit on a guarding partner;
+- the wrong target height;
+- a broken combination (wrong order) and, after three, guidance for struggling;
+- too slow between drill steps;
+- the next drill step after a correct one (first repetition only);
+- the first clean repetition, and the halfway point of a challenge;
+- accuracy improving from below 50% to 70% or more;
+- 10 seconds left in a timed challenge;
+- being hit while learning Block → Counter;
+- no attack for 9 s;
+- in practice: the basics not yet landed, then lead leg, head height and guard.
+
+**Fatigue rules:**
+- Only one tip is on screen; there is never a stack.
+- At least 4 s between automatic tips.
+- The same tip waits 22 s before repeating, and repeats at most 3 times. Objectives and milestones show once.
+- Corrections outrank information, which outranks encouragement. A higher-priority tip replaces a lower one.
+- Nothing new appears while the player is mid-technique, except the time warning.
+- Stale encouragement is dropped.
+- Tips stop when the activity ends; Retry or Next starts a fresh coach.
+
+**Input-aware wording** (`how(action, scheme)`):
+- The scheme is gamepad if a pad was used, keyboard once a key was pressed, and otherwise the touch layout (Compact or Classic) when touch controls are shown.
+- Wording uses only real bindings: keyboard keys, gamepad buttons, or on-screen controls ("slide from Kick to Round on the outer ring", "set the Body/Head chip to Head").
+- The training HUD's "Next:" and "Target:" line uses the same wording.
+
+**UI (`.coach-tip`):**
+- One compact note (14 px Plex) at the top-left under the training bar, clear of the fighters, centre toasts, pause button and touch controls, inside the safe areas. On phones in landscape it is narrower, with its actions stacked below.
+- The left edge is coloured by tone: fg for corrections, muted for information, brass for brief positives, warn for time.
+- Actions: ✕ dismisses, and **Turn off tips** disables tips and confirms how to get help.
+- **Hint** in the training bar, or **H** on a keyboard, shows the most useful instruction now, even with tips off.
+
+**Preference:** Settings › Training › **Show training tips**. It is on by default, saved in `dojang.settings.v1` as `trainingTips`, and also available in the pause menu's settings. Objectives, counters and completion feedback are never affected.
+
 ## Accessibility
 
 - **Focus:** a visible brass ring on every interactive element.

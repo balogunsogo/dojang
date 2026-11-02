@@ -5,10 +5,14 @@ import { createRng } from '../math';
 import type { TrainingResult } from '../progress/progress';
 import { type Activity } from './activities';
 
+/** What happened, for the coach (observation only; outcomes are decided elsewhere). */
+export type FeedbackCode = 'whiff' | 'blocked' | 'invalid' | 'too-close' | 'wrong-target' | 'hit' | 'step' | 'rep' | 'broken' | 'slow' | 'complete' | 'timeup';
+
 export interface TrainingFeedback {
   text: string;
   sub?: string;
   good: boolean;
+  code?: FeedbackCode;
 }
 
 export interface TrainingHud {
@@ -91,17 +95,17 @@ export class TrainingController {
     const a = this.activity;
     for (const e of world.events) {
       if (e.type === 'attack' && e.fighter === 0) this.attempts++;
-      else if (e.type === 'whiff' && e.fighter === 0) this.miss('Miss', 'Step in: you were out of range');
+      else if (e.type === 'whiff' && e.fighter === 0) this.miss('Miss', 'Step in: you were out of range', 'whiff');
       else if (e.type === 'block' && e.defender === 0) this.drillStep('block', world.tick);
-      else if (e.type === 'block' && e.attacker === 0) this.miss('Blocked', 'Your partner guarded');
+      else if (e.type === 'block' && e.attacker === 0) this.miss('Blocked', 'Your partner guarded', 'blocked');
       else if (e.type === 'hit' && e.attacker === 0) {
         const kind = e.move.id;
         if (!e.valid) {
-          this.miss('No point', e.reason === 'Insufficient impact' ? 'Too close — no impact. Give the kick room to extend' : e.reason);
+          this.miss('No point', e.reason === 'Insufficient impact' ? 'Too close — no impact. Give the kick room to extend' : e.reason, e.reason === 'Insufficient impact' ? 'too-close' : 'invalid');
           continue;
         }
         if (this.target && e.zone !== this.target) {
-          this.miss('Wrong target', `Aim for the ${this.target}${this.target === 'head' ? ' (hold E / Head)' : ''}`);
+          this.miss('Wrong target', `Aim for the ${this.target}`, 'wrong-target');
           continue;
         }
         this.landed[kind] = (this.landed[kind] ?? 0) + 1;
@@ -109,21 +113,21 @@ export class TrainingController {
         this.combo++;
         this.bestCombo = Math.max(this.bestCombo, this.combo);
         if (a.kind === 'drill') this.drillStep(kind, world.tick);
-        else this.good(`${KICK_NAME[kind]} ✓`, `${e.zone}${this.combo > 2 ? ` · combo ${this.combo}` : ''}`);
+        else this.good(`${KICK_NAME[kind]} ✓`, `${e.zone}${this.combo > 2 ? ` · combo ${this.combo}` : ''}`, 'hit');
         if (a.target === 'alternate') this.target = this.target === 'body' ? 'head' : 'body';
       }
     }
     // Drill timing window.
     if (a.kind === 'drill' && this.step > 0 && a.window && world.tick - this.stepTick > a.window * TICK_HZ) {
       this.step = 0;
-      this.miss('Too slow', `Follow up within ${a.window} s`);
+      this.miss('Too slow', `Follow up within ${a.window} s`, 'slow');
     }
     // Objectives.
     if (a.kind === 'challenge' && this.hits >= a.goal) this.complete();
     if (a.kind === 'drill' && this.reps >= a.goal) this.complete();
     if (a.seconds !== null && !this.done && this.elapsed >= a.seconds) {
       this.failed = true;
-      this.feedback.push({ text: "Time's up", sub: `${this.hits} / ${a.goal}`, good: false });
+      this.feedback.push({ text: "Time's up", sub: `${this.hits} / ${a.goal}`, good: false, code: 'timeup' });
     }
   }
 
@@ -137,27 +141,27 @@ export class TrainingController {
       if (this.step >= steps.length) {
         this.step = 0;
         this.reps++;
-        this.good(`Repetition ${this.reps} / ${this.activity.goal}`, steps.map((s) => s.label).join(' → '));
-      } else this.good(`${want.label} ✓`, `now: ${steps[this.step].label}`);
+        this.good(`Repetition ${this.reps} / ${this.activity.goal}`, steps.map((s) => s.label).join(' → '), 'rep');
+      } else this.good(`${want.label} ✓`, `now: ${steps[this.step].label}`, 'step');
     } else if (kind !== 'block') {
       // A technique that isn't the next step breaks the combination; it may start a new one.
       this.step = steps[0].accept.includes(kind) ? 1 : 0;
       this.stepTick = tick;
-      this.miss('Combination broken', `Expected ${want.label}`);
+      this.miss('Combination broken', `Expected ${want.label}`, 'broken');
     }
   }
 
-  private good(text: string, sub?: string) {
-    this.feedback.push({ text, sub, good: true });
+  private good(text: string, sub?: string, code?: FeedbackCode) {
+    this.feedback.push({ text, sub, good: true, code });
   }
-  private miss(text: string, sub?: string) {
+  private miss(text: string, sub?: string, code?: FeedbackCode) {
     this.combo = 0;
-    this.feedback.push({ text, sub, good: false });
+    this.feedback.push({ text, sub, good: false, code });
   }
   private complete() {
     this.done = true;
     this.doneAt = this.elapsed;
-    this.feedback.push({ text: 'Complete!', sub: this.activity.title, good: true });
+    this.feedback.push({ text: 'Complete!', sub: this.activity.title, good: true, code: 'complete' });
   }
 
   /** Training partner behaviour (fighter 1). */

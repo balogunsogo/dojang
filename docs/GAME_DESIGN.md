@@ -106,7 +106,7 @@ Based on the World Taekwondo Competition Rules & Interpretation in force from Ju
   - **Hard:** 8-tick reaction, frequent guard, punishes whiffs, dashes.
 
   The AI uses the same intents and frame data as the player. The presets are a first pass and get tuned in Phase 2.
-- **Training (implemented in Phase 4).** Runs on the same combat simulation; a training partner holds a lit target ring. Practice (free), Challenges (Body 10 in 40 s, Head 5 in 40 s, Alternating 8 in 45 s, Moving 6 in 45 s) and Drills (Front → Roundhouse, Lead → Rear roundhouse, Side → Back kick, Block → Counter; 3 reps, order and timing enforced). Live feedback and an end summary with tips.
+- **Training (implemented in Phase 4).** Runs on the same combat simulation; a training partner holds a lit target ring. Practice (free), Challenges (Body 10 in 40 s, Head 5 in 40 s, Alternating 8 in 45 s, Moving 6 in 45 s) and Drills (Front → Roundhouse, Lead → Rear roundhouse, Side → Back kick, Block → Counter; 3 reps, order and timing enforced). Live feedback, an end summary with tips, and a contextual coach: one dismissible, input-aware tip at a time (objective, range and target corrections, combination guidance, time warnings), a Hint action, and a Show training tips setting.
 
 ## Progression (Phase 4)
 

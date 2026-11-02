@@ -349,3 +349,25 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
   .menu-layer, .panel-col, .overlay.match-panel, .loading .line, .promotion .belt-step .new i { animation: none; }
   .menu-root::after, .menu-backdrop .stage, .match .game-canvas { transition: opacity var(--t-fast) linear; }
 }
+
+/* ── Training coach tip: one small note, top-left under the training bar ── */
+.hud.training .tbtn.hint { position: static; width: auto; height: 30px; padding: 0 12px; border-radius: 15px; font-size: 12px; pointer-events: auto; }
+.train-hint .how { color: var(--muted); }
+.coach-tip { position: absolute; left: calc(var(--s4) + var(--sal)); top: calc(76px + var(--sat)); width: min(380px, calc(100% - 2 * var(--s4) - var(--sal) - var(--sar)));
+  display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s3) var(--s3) var(--s3) var(--s4); background: rgb(21 18 15 / .82); border-left: 2px solid var(--muted);
+  border-radius: var(--radius); color: var(--fg); font-family: var(--font-ui); font-size: 0.875rem; line-height: 1.3rem; animation: tip-in var(--t-base) var(--ease); pointer-events: none; }
+.coach-tip.fix { border-left-color: var(--fg); }
+.coach-tip.good { border-left-color: var(--brass); }
+.coach-tip.warn { border-left-color: var(--warn); }
+.coach-tip p { margin: 0; flex: 1; }
+.coach-actions { display: flex; align-items: center; gap: var(--s1); margin: -6px -4px -6px 0; pointer-events: auto; }
+.coach-actions button { min-height: 36px; min-width: 36px; padding: 0 var(--s2); background: none; border: 0; color: var(--muted); font-size: 0.75rem; font-weight: 500; white-space: nowrap; }
+.coach-actions button:hover { color: var(--fg); }
+.coach-actions button:last-child { font-size: 0.9rem; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* Phones in landscape: clear of the pause button; narrower so the fighters stay visible. */
+@media (max-height: 500px) {
+  .coach-tip { top: calc(80px + var(--sat)); width: min(300px, 38vw); flex-direction: column; gap: 0; padding: var(--s2) var(--s2) var(--s1) var(--s3); font-size: 0.8125rem; line-height: 1.15rem; }
+  .coach-actions { align-self: flex-end; margin: 0 -4px 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .coach-tip { animation: none; } }

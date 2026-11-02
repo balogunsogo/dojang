@@ -17,6 +17,7 @@ import { CompetitiveRules } from './rules/competitive/CompetitiveRules';
 import { ArcadeRules, type Ruleset } from './rules/rules';
 import type { Belt, TrainingResult } from './progress/progress';
 import { activityById } from './training/activities';
+import { Coach, type CoachTip, type InputScheme } from './training/Coach';
 import { TrainingController, type TrainingHud } from './training/TrainingController';
 import { TrainingRules } from './training/TrainingRules';
 import type { HudState, Toast } from '../store/useGameStore';
@@ -33,6 +34,8 @@ export interface SessionCallbacks {
   onTrainingEnd?(r: TrainingResult): void;
   /** Arcade/Competitive match finished; `won` is from the player's side. */
   onMatchEnd?(won: boolean): void;
+  /** Training coach: the visible tip (or null) and the active input scheme. */
+  onCoach?(tip: CoachTip | null, scheme: InputScheme): void;
 }
 
 export interface SessionOptions {
@@ -97,6 +100,10 @@ export class GameSession {
   readonly defs: [CharacterDef, CharacterDef];
   /** Training activity controller (training mode only). */
   training: TrainingController | null = null;
+  /** Training coach (observes only; never changes outcomes). */
+  coach: Coach | null = null;
+  private coachPrefs = { enabled: true, showTouch: false, controlScheme: 'compact' as 'compact' | 'classic' };
+  private lastScheme: InputScheme | null = null;
   private trainingReported = false;
   private matchReported = false;
 
@@ -113,6 +120,7 @@ export class GameSession {
     this.world = new CombatWorld(rules, [this.defs[0].stats, this.defs[1].stats]);
     if (o.mode === 'training') {
       this.training = new TrainingController(activityById(o.activity ?? 'practice'));
+      this.coach = new Coach(this.training.activity, 'keyboard', true);
       this.world.skipIntro = true;
       this.resetTraining();
     }
@@ -149,6 +157,8 @@ export class GameSession {
   rematch() {
     if (this.training) {
       this.training = new TrainingController(this.training.activity);
+      this.coach = new Coach(this.training.activity, this.inputScheme(), this.coachPrefs.enabled);
+      this.publishCoach(true);
       this.trainingReported = false;
       this.resetTraining();
     } else this.world.resetMatch();
@@ -170,7 +180,51 @@ export class GameSession {
   finishTraining() {
     if (!this.training || this.trainingReported) return;
     this.trainingReported = true;
+    this.coach?.stop();
+    this.publishCoach();
     this.o.callbacks.onTrainingEnd?.(this.training.result());
+  }
+
+  /** Which controls the player is using: gamepad or keyboard once used, otherwise the touch layout if shown. */
+  inputScheme(): InputScheme {
+    const inp = this.o.input;
+    if (inp.lastDevice === 'gamepad') return 'gamepad';
+    if (inp.lastDevice === 'keyboard' && inp.keyboardUsed) return 'keyboard';
+    return this.coachPrefs.showTouch ? this.coachPrefs.controlScheme : 'keyboard';
+  }
+
+  /** Training tips preferences and the touch layout (for input-aware wording). */
+  setCoachPrefs(p: { enabled: boolean; showTouch: boolean; controlScheme: 'compact' | 'classic' }) {
+    this.coachPrefs = p;
+    if (this.coach) {
+      this.coach.enabled = p.enabled;
+      if (!p.enabled && this.coach.current && !this.coach.current.manual) this.coach.dismiss();
+    }
+    this.publishCoach(true);
+  }
+
+  /** Manual help: always available, even with automatic tips off. */
+  coachHint() {
+    if (!this.coach || !this.training || this.training.finished) return;
+    this.coach.scheme = this.inputScheme();
+    this.coach.hint(this.training);
+    this.publishCoach();
+  }
+
+  coachDismiss() {
+    this.coach?.dismiss();
+    this.publishCoach();
+  }
+
+  private publishCoach(force = false) {
+    const c = this.coach;
+    if (!c) return;
+    const scheme = this.inputScheme();
+    if (force || c.changed || scheme !== this.lastScheme) {
+      c.changed = false;
+      this.lastScheme = scheme;
+      this.o.callbacks.onCoach?.(c.current, scheme);
+    }
   }
 
   private shakeScale = 1;
@@ -295,6 +349,11 @@ export class GameSession {
     const t = this.training;
     if (!t) return;
     t.update(this.world);
+    if (this.coach) {
+      this.coach.scheme = this.inputScheme();
+      this.coach.tick(t, t.feedback, this.world);
+      this.publishCoach();
+    }
     for (const f of t.feedback) {
       audio.feedback(f.good);
       this.o.callbacks.onToast({ text: f.text, sub: f.sub, side: null, kind: f.good ? 'score' : 'info' }, f.good ? 900 : 1100);

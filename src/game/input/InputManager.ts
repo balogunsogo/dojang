@@ -68,6 +68,8 @@ export class InputManager {
   private listeners: [EventTarget, string, EventListener, AddEventListenerOptions?][] = [];
   /** Last device that produced input; the UI uses it to show/hide touch controls. */
   lastDevice: 'keyboard' | 'touch' | 'gamepad' = 'keyboard';
+  /** A real key press has happened (lastDevice defaults to keyboard). */
+  keyboardUsed = false;
 
   attach(canvas: HTMLElement) {
     const on = (t: EventTarget, type: string, fn: EventListener, opts?: AddEventListenerOptions) => {
@@ -111,6 +113,7 @@ export class InputManager {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     e.preventDefault();
     this.lastDevice = 'keyboard';
+    this.keyboardUsed = true;
     if (down) {
       if (!e.repeat) this.press(action);
       this.held.add(action);
