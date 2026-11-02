@@ -115,6 +115,7 @@ export function TrainingSummary({ session }: { session: GameSession }) {
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Training summary" data-testid="training-summary">
       <div className="panel wide">
+        <p className="eyebrow">Training · {a.kind === 'practice' ? 'Practice' : a.kind === 'challenge' ? 'Challenge' : 'Drill'}</p>
         <h2 className={r.completed ? 'win' : ''}>{a.kind === 'practice' ? 'Practice summary' : r.completed ? 'Complete!' : "Time's up"}</h2>
         <p className="muted">{a.title}</p>
         <div className="stat-grid">
@@ -150,7 +151,7 @@ export function TrainingSummary({ session }: { session: GameSession }) {
         <p className="tip">{tip}</p>
         <h3>Next belt</h3>
         <BeltRequirements progress={progress} />
-        <div className="row">
+        <div className="row actions">
           <button className="primary" onClick={() => session.rematch()} data-testid="retry-activity" autoFocus>
             Retry
           </button>
@@ -182,8 +183,11 @@ export function PromotionOverlay() {
   return (
     <div className="overlay promo" role="dialog" aria-modal="true" aria-label="Belt promotion" data-testid="promotion">
       <div className="panel">
-        <div className="belt-band" style={{ background: BELT_COLORS[belt] }} aria-hidden />
-        <h2 className="win">Promoted!</h2>
+        <p className="eyebrow">Belt promotion</p>
+        <div className="belt-band" style={{ ['--belt' as string]: BELT_COLORS[belt] }} aria-hidden>
+          <i />
+        </div>
+        <h2 className="win">{belt[0].toUpperCase() + belt.slice(1)} belt</h2>
         <p>
           You earned the <b>{belt[0].toUpperCase() + belt.slice(1)} belt</b>. It now appears on your dobok.
         </p>

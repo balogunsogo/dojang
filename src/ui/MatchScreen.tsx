@@ -128,7 +128,7 @@ export function MatchScreen() {
   }, [session, showTouch, settings.controlScheme]);
 
   return (
-    <div className="match">
+    <div className={`match ${session ? 'ready' : ''}`}>
       <Canvas
         className="game-canvas"
         dpr={[profile.minDpr, profile.maxDpr]}
@@ -143,7 +143,13 @@ export function MatchScreen() {
         <color attach="background" args={['#1a1510']} />
         <SessionDriver input={input} onReady={setSession} />
       </Canvas>
-      {loading && <div className="loading">Entering the dojang…</div>}
+      {loading && (
+        <div className="loading">
+          <p className="eyebrow">{mode === 'training' ? 'Training' : mode === 'competitive' ? 'Competitive sparring' : 'Arcade sparring'}</p>
+          <p className="enter">Entering the dojang</p>
+          <i className="line" aria-hidden />
+        </div>
+      )}
       {loadError && (
         <div className="loading error" role="alert">
           <p>Could not load the fighters. Check your connection and try again.</p>

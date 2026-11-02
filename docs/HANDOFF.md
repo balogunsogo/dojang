@@ -1,5 +1,13 @@
 # Handoff
 
+> **Phase 7 (cinematic menu and UI refinement)** is on `claude/amazing-galileo-4k6k1j`, branched from `main` aeff806 after PR #5 merged.
+> - **New:** `src/game/menu/MenuStage.ts` (the live dojang behind the menu) and `src/ui/MenuBackdrop.tsx`. `src/ui/Menu.tsx` is rewritten.
+> - **Restyled:** the results, summary, promotion and loading screens, plus light HUD styling in `src/styles.css`.
+> - **Design reference:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md). Screenshots are in `docs/media/phase7/` (before and after).
+> - **Verification:** tsc clean, build OK, `scripts/menu-smoke.mjs` 18/18 (desktop navigation, transitions, phone layout). By request, the full unit and e2e suites were not rerun: gameplay logic was not modified.
+> - **e2e helper:** the Competitive section of `scripts/e2e.mjs` was updated for the new flow (`round-120` → `opp-normal` → `start-match`).
+
+
 > **Phases 3–6 are complete as a release candidate** on `claude/amazing-galileo-4k6k1j` (draft PR balogunsogo/dojang#5, base `main` 470ba0b). Read **[RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md)** first: it lists what shipped per phase, verification (tsc clean, 105/105 unit, build OK, 71/71 e2e on 2026-11-02), performance, known issues and the human UAT checklist.
 > - Commits: Phase 3 6b13725, Phase 4 d1fb357, Phase 5 5479f7b, Phase 6 (docs and release review).
 > - Next steps: human UAT on real devices and browsers (RELEASE_CANDIDATE.md §7); then, if approved, mark PR #5 ready and merge. Production deploy is **not authorized** yet.
