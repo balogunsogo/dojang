@@ -58,7 +58,6 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 .menu-item.t2.current::before { top: calc(var(--s1) + 0.75rem); }
 .menu-item:hover:not(:disabled) { color: var(--fg); }
 .menu-item:disabled { color: var(--faint); cursor: default; }
-.menu-item:focus-visible .label { text-decoration: underline; text-decoration-color: var(--brass); text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
 
 /* ── Actions ────────────────────────────────────────────────────── */
 .btn-primary { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); width: 100%; min-height: 56px; padding: 0 var(--s5); border: 0; border-radius: var(--radius);
@@ -157,7 +156,7 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 .screen-head { flex: none; }
 .screen-head .btn-back { margin-bottom: var(--s3); }
 .screen-head .title { margin-bottom: var(--s5); }
-.screen-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px var(--s4) var(--s4); margin: 0 calc(-1 * var(--s4)); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.screen-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 2px var(--s4) var(--s4); margin: 0 calc(-1 * var(--s4)); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .screen-body > .group-label:first-child { margin-top: var(--s2); }
 .screen-body > .body-copy + .group-label, .screen-body > .segmented + .body-copy { margin-top: var(--s5); }
 .screen-body > .segmented + .body-copy { margin-top: var(--s4); }
@@ -173,7 +172,7 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 .col-detail .group-label { margin-top: var(--s6); }
 @media (min-width: 1180px) and (min-height: 600px) {
   .screen.split { width: calc(var(--ui-col) + 360px + var(--s7) + 2 * var(--edge)); }
-  .screen.split .screen-body { grid-template-columns: var(--ui-col) 360px; }
+  .screen.split .screen-body { grid-template-columns: minmax(0, var(--ui-col)) minmax(0, 360px); }
   .screen.split .col-detail { position: sticky; top: 0; align-self: start; }
   .screen.split .col-detail .group-label { margin-top: var(--s2); }
   .screen.split .screen-foot { width: var(--ui-col); }
