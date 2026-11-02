@@ -20,6 +20,16 @@ Every asset shipped in the repository or generated at runtime is listed here wit
 
 `Punch_Jab` and `Punch_Cross` are shipped but **not used yet**; the punch is procedural for stance consistency. They are kept for evaluation in Phase 5 (about 20 KB).
 
+### UI fonts — `src/assets/fonts/*.woff2` (8 files, ~117 KB total; each loads only when used)
+
+| Family | Weights | Files | Source | License |
+|---|---|---|---|---|
+| Hahmlet (display: wordmark, titles) | 300, 400 Latin; 400 Korean subset | `hahmlet-latin-300/400`, `hahmlet-ko-400` (2.9 KB) | Fontsource `@fontsource/hahmlet` 5.x (Google Fonts, designed by Hypertype / C. Kim) | SIL Open Font License 1.1 |
+| IBM Plex Sans (interface) | 400, 500, 600 Latin | `plex-sans-latin-400/500/600` | Fontsource `@fontsource/ibm-plex-sans` 5.x (IBM) | SIL Open Font License 1.1 |
+| IBM Plex Sans KR (Hangul in UI text) | 400, 600 Korean subset | `plex-sans-kr-400/600` (~3.6 KB each) | Fontsource `@fontsource/ibm-plex-sans-kr` 5.x (IBM) | SIL Open Font License 1.1 |
+
+Built by `scripts/build-fonts.py` (fontTools): the Latin files are copied unchanged; the Korean faces are subset to the Hangul the DOM renders (도장 김재원 박하나 청 홍 태권), with matching `unicode-range` in `src/fonts.css`, so any other Hangul falls back to the system Korean font. The OFL permits redistribution and modification with the software (the fonts are not sold on their own). **Review note:** the OFL treats subsetting as a modification, and IBM Plex declares "Plex" as a Reserved Font Name. The Korean subset files here are referenced under the original family names, the same practice Fontsource and Google Fonts use for their own subset files. If strict Reserved-Font-Name handling is required, rename the two `plex-sans-kr` faces' family (e.g. `DojangSansKR`) in `src/fonts.css` and the font-name tables; nothing else depends on the name.
+
 ## Animation provenance
 
 | Motion | Source | Status |

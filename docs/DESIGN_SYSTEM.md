@@ -1,113 +1,119 @@
-# DOJANG Design System (Phase 7)
+# DOJANG Design System
 
-The menus are a cinematic layer over the game's own dojang. The direction is restrained: a lit room, strong type, a single accent colour and very little chrome. This page is the reference for anyone adding a screen.
+The approved **DOJANG UI System** (a Claude Design package) is implemented here. Its tokens are the source of truth and are copied verbatim into `src/tokens.css`. This page is the developer reference: what exists, where it lives, and the rules that keep new screens consistent.
 
-## Principles
+**Direction:** designed simplicity over a live 3D hall. The dojang and fighters are the hero. Hierarchy comes from type, spacing and one scrim; there are no boxes, badges or decorative gold.
 
-1. **The dojang is the backdrop.** Menus sit over the live 3D room, not over decorative panels. Text gets contrast from a gradient grade, not from boxes.
-2. **One accent.** Muted amber marks the current selection, primary actions and section labels. Dancheong red and the chung/hong corner colours are used only where they carry meaning (corners, belts, scores).
-3. **Hierarchy through type, not borders.** Use a serif display face for names and titles, and small letter-spaced capitals for labels. Body text uses the system face. There are no card grids and no heavy outlines.
-4. **Fast, skippable motion.** Every transition is under 0.35 s, except the 3D camera ease. Nothing blocks input. Everything collapses to instant changes under `prefers-reduced-motion`.
-5. **Touch first.** Every target is at least 44 px. Safe-area insets are respected. Panels become bottom sheets on portrait phones.
+## Rules
 
-## Tokens (`src/styles.css`, `:root`)
+1. **Brass is for three things only:** the current-item tick, the focus ring, and the one primary button on a screen. Section labels, the Hangul 도장, tab underlines and selected rows use fg or muted.
+2. **No tracked uppercase except the wordmark.** Everything else is sentence case. Labels are 13/600, muted.
+3. **Menus never sit in a box.** The scrim gives contrast. In-match overlays (pause, results, training summary) use a solid ink 0.88 column at the same left edge.
+4. **One edge, one column.** `--edge` (96 / 64 / 24–32 px) and `--ui-col` (460 / 420 px) are shared by every screen, so screens swap without anything jumping.
+5. **One primary per screen**, with its input hint on the right ("Enter"). Everything else is a quiet text action.
+6. **Fast, short motion:** 120–240 ms fades and 8 px slides. Under `prefers-reduced-motion` it is fades only, plus a static camera.
 
-| Token | Value | Use |
+## Tokens (`src/tokens.css`)
+
+| Group | Tokens |
+|---|---|
+| Colour | `--ink #15120F` (background), `--fg #EFE6D8`, `--muted #A99F90`, `--faint #7A7166`, `--surface` (fg 7%), `--surface-hover` (fg 4%), `--line` (fg 12%), `--brass #C9A062` / `--brass-hover`, `--on-brass`, `--chung #3C6BC4`, `--hong #C0443A`, `--warn` |
+| Type | `--font-display`: Hahmlet → Noto Serif KR → Nanum Myeongjo → Georgia. `--font-ui`: IBM Plex Sans → IBM Plex Sans KR → Apple SD Gothic Neo → Malgun Gothic → system-ui |
+| Space | `--s1`–`--s9` (4–96), `--edge`, `--ui-col` |
+| Shape and motion | `--radius 2px`, `--t-fast 120ms`, `--t-base 180ms`, `--t-screen 240ms`, `--ease` |
+| Scrim | `--scrim`: left-to-right, 0.86 → 0.62 → 0 at 58%. Portrait phones use a bottom-up variant. |
+
+Legacy gameplay CSS keeps `--gold` only for the touch controls' press feedback; the controls stay as built.
+
+## Type roles (`src/ui/menu.css`)
+
+| Role | Font, weight | Desktop · phone | Notes |
+|---|---|---|---|
+| wordmark | Hahmlet 300 | 104 · 56 (40 in landscape) | +0.08em, UPPER: the only uppercase setting. 도장 at 0.29× on the baseline, muted |
+| title | Hahmlet 400 | 44/52 · 32/40 | Screen titles |
+| menu-1 | Plex 500 | 26/34 · 22/30 | Play modes and pause actions |
+| menu-2 | Plex 500 | 17/24 · 16/24 | Secondary menu, option names, settings rows, segmented controls |
+| body | Plex 400 | 16/24 · 15/22 | Max 52ch |
+| label | Plex 600 | 13/18 | Group labels, muted |
+| caption | Plex 400 | 14/20 | Descriptions, hints, credits |
+| button | Plex 600 | 16/20 | Primary actions |
+| numeral | Plex 600, `tabular-nums` | 32 / 44 | Scores, timers, results |
+
+Hangul always follows its role's family with no letter-spacing and is wrapped in `lang="ko"`.
+
+**Fonts** are self-hosted: `src/fonts.css` and `src/assets/fonts`, built by `scripts/build-fonts.py`.
+- Latin Hahmlet 300/400 and Plex 400/500/600 run 18–24 KB each.
+- The Korean faces are subset to the Hangul the UI renders, about 3 KB each, with exact `unicode-range`. Other Hangul falls back to the system Korean font.
+- Plex 400 and 600 are preloaded; everything uses `font-display: swap`.
+- Vite is told never to inline `.woff2`, so the lazy faces stay lazy.
+
+## Components (`src/ui/kit.tsx`)
+
+| Component | Use | Behaviour |
 |---|---|---|
-| `--char` | `#0f0b08` | Page background, deepest shadow |
-| `--wood` | `#2a1c12` | Warm surface tint |
-| `--surface` / `--panel` | translucent charcoal | Sheets, dialogs |
-| `--ink` | `#f2ebdf` | Primary text (warm off-white) |
-| `--ink-2` | ink at 72% | Secondary text, unselected menu items |
-| `--muted` | `#a99c88` | Captions, metadata |
-| `--gold` / `--gold-hi` | `#d6a548` / `#f0c66b` | Accent, selection, primary actions |
-| `--gold-soft` | amber at 16% | Selected-row wash |
-| `--ember` | `#a8392a` | Dancheong red (sparingly) |
-| `--line` | warm white at 14% | Hairline dividers |
-| `--chung` / `--hong` | `#1f4fb8` / `#c42b2b` | Corner colours only |
-| `--serif` | Iowan Old Style → Palatino → Noto Serif KR → Georgia | Display: title, sheet titles, fighter names, results, numerals |
-| `--ease` | `cubic-bezier(0.22, 0.8, 0.24, 1)` | All UI motion |
+| `Wordmark` | Home only (`h1`, `aria-label="Dojang"`) | Hahmlet light, tracked; 도장 muted |
+| `Menu` (menu list) | Home, pause | One shared current index for pointer, ↑/↓ keys and gamepad. Two sizes (`tier` 1 or 2). The description shows under the current item only (`aria-describedby`). The current item gets the brass tick. Hit area ≥ 44 px. |
+| `PrimaryButton` | One per screen | Brass fill, label left, input hint right; disabled = surface and faint |
+| `QuietButton`, `BackButton` | Back, Change, Cancel, secondary results actions | Text only; Back is "← Menu" |
+| `Segmented` | Arcade/Competitive, round length, touch layout, quality | `role="radiogroup"`, ←/→ move. Selected = fg plus a 2 px fg underline (the `small` variant adds a surface fill). |
+| `OptionRow` / `OptionGroup` | Opponent, fighter, training activity | Native radio underneath. Leading marker (belt or none), name, one-line description, radio. Selected = surface row and filled radio. No borders. |
+| `BeltMarker`, `CornerTag` | Belts, corners | A belt is a flat 24 × 6 bar (48 × 8 on the ladder), always next to its name. A corner is a 4 px bar plus the name. |
+| `SettingToggle`, `SettingSlider`, `SettingChoice`, `SettingLink` | Settings | 52 px rows, label left, control right. Toggles are fg switches (not brass). Sliders always print their value. |
+| `Hints` | Home, setup, pause | Key glyph plus action; hidden on touch devices |
+| `GroupLabel` | Section labels | 13/600 muted (an `h2`) |
+| `ScreenShell` | Every sub-screen | Back, optional context, title; a scrolling body; a pinned footer. Esc goes back; Enter triggers the primary unless focus is on another control. |
+| `useGamepadNav` | Menu, pause, results, summary | D-pad/stick moves focus (reusing the menu list's own arrow handling), A activates, B goes back. Polls only after `gamepadconnected`. |
 
-No web fonts are downloaded. The serif stack uses fonts already installed on Apple, Windows and Android devices.
-
-## Type scale
-
-- **Title:** `DOJANG`, serif, 52–92 px, tracking 0.16em. The Hangul 도장 ("dojang", training hall) sits beside it in amber.
-- **Eyebrow:** 11 px, 600 weight, tracking 0.32em, uppercase, amber. Example: "태권도 · Taekwondo" (태권도 = Taekwondo).
-- **Menu item:** 15 px, 600 weight, tracking 0.2em, uppercase. Its one-line description appears only on the active item.
-- **Sheet title:** serif, 28–40 px. **Section label (h3):** 11 px, tracking 0.28em, amber.
-- **Body:** system face, 14 px, line height 1.55.
-
-Korean text is limited to verified words: 태권도 (Taekwondo), 도장 (dojang), and the fighters' names 김재원 / 박하나. Korean referee calls are only used in-match, as before. Do not add decorative Hangul.
-
-## Components
-
-| Component | Class | Notes |
-|---|---|---|
-| Primary navigation | `.main-nav .nav-item` | Text-only list. Active item: amber label, 18 px amber rule, slides 14 px right, shows its description. Mouse hover, focus and ↑/↓ all set the active item. |
-| Side sheet | `.sheet` | Left-anchored panel up to 580 px wide: eyebrow, serif title, "← Back". On portrait phones it becomes a bottom sheet (78 vh) over the scene. |
-| Tabs / segmented | `.seg2` | Underline tabs (rules, round length, settings/controls). |
-| Selectable row | `.opp`, `.ftab`, `.act-row` | No box at rest. Selected: amber wash plus an amber left or bottom edge. |
-| Primary action | `.cta` | Full-width amber button, uppercase, 54 px. One per sheet. |
-| Secondary action | `.ghost-cta` | Hairline outline. |
-| Belt | `.belt-chip`, `.belt-track .knot` | Belt colour band with a knot. The current belt glows amber; locked belts are dimmed. |
-| Difficulty | `.pips3` | Three amber diamonds. |
-| Dialog | `.overlay .panel` | Charcoal gradient, 2 px amber top edge, serif uppercase heading. Used by Pause, Result, Training summary and Promotion. |
-| Scoreline | `.scoreline` | Result screen: names with chung/hong edges and a serif score. |
+**Do not add:** cards or tiles, eyebrow labels, divider ornaments, badges, chips, pills, tooltips, extra modals, or a generic input library. The touch controls stay as built.
 
 ## Screens
 
-- **Home:**
-  - Title, tagline, then six actions: Training (or **Continue Training** once you have history, showing the recommended next activity), Arcade Sparring, Competitive Sparring, Choose Fighter, Belt Progression, Settings & Controls.
-  - The fighter and belt are shown at the foot.
-- **Sparring:** an Arcade/Competitive tab, three rule lines, the opponent (White/Red/Black belt AI), the round length (Competitive), and **Start match**.
-- **Training:**
-  - A "Recommended next" card: the activity that moves you toward your next belt.
-  - The activities, grouped as Free practice, Target challenges and Combination drills. Each shows its objective, difficulty pips, completion tick and best record.
-- **Fighter:** name tabs (the 3D camera moves to a close-up of your fighter, and switching swaps the model), a blurb, stat bars, and the belt. Actions: Spar / Train.
-- **Belt progression:** the White → Yellow → Green track, the next-belt meter, the requirement checklist, the record, and reset.
-- **Settings & Controls:** tabs. Every existing preference is kept, plus a new **Animated menu background** toggle.
-- **Results, summary, promotion:** cinematic dialogs. Promotion reveals the belt band, then the knot, then the title.
+| Screen | File | Contents (real game data) |
+|---|---|---|
+| Home | `Menu.tsx › Home` | Wordmark, tagline. Menu-1: Training (**Continue training** once you have history, showing the recommended next activity), Arcade sparring, Competitive sparring. Menu-2: Choose fighter, Belt progression, Settings & controls. Footer: fighter name, Hangul and belt, plus keyboard hints. |
+| Sparring | `Menu.tsx › SparSetup` | Arcade/Competitive tabs; the real rules copy (Competitive points 1/2/3/4/6, gam-jeom, tie-breaks); opponent White/Red/Black belt; round length 1:00/1:30/2:00 (60/90/120 s, 1:30 default); Start match |
+| Training | `Menu.tsx › TrainingSelect` | All 9 activities grouped as practice, challenges and drills, each with its objective (from `activities.ts`) and done state. The objective panel shows the brief, goal, best record and status. "Begin practice / challenge / drill". |
+| Fighter | `Menu.tsx › FighterSelect` | Kim Jae-won 김재원 / Park Ha-na 박하나 with blurbs, power/speed/recovery and the current belt. "Fight as …" goes to sparring setup. The 3D close-up swaps the model. |
+| Belt progression | `Menu.tsx › BeltProgression` | White → Yellow → Green ladder with earned, current, next and locked states. The next milestone shows the real requirement labels, status and progress bars. Also the record line and reset. |
+| Settings & controls | `SettingsPanel.tsx` | Every existing preference in two columns (controls, camera & comfort / audio, graphics, about) plus the control reference sub-screen. The credit line moved to About. |
+| Pause | `Overlays.tsx › PauseMenu` | Context ("Competitive · Red belt"), score with corner tags, round and time left. Resume / Restart / (End activity) / Settings & controls / Quit to menu. |
+| Results | `Overlays.tsx › ResultOverlay` | "You win / You lose / Draw", round score, the per-round table (Competitive, with the technique breakdown folded away), and an inline promotion note. Rematch (Enter) / Back to menu (Esc). |
+| Training summary | `Training.tsx › TrainingSummary` | Stats, one tip, the inline promotion note, and next-belt requirements. Retry / Next / Training menu / Main menu. |
 
-## Motion
+## Responsive behaviour
 
-| Transition | Treatment |
-|---|---|
-| Home ↔ panel | Sheet slides in from the left by 14 px with a fade, in 0.32 s. The 3D camera eases to the panel's shot in about 1 s. |
-| Panel shots | home: profile two-shot · spar: low angle · training: toward the equipment wall · fighter: close-up · progress: the belt rack · settings: high wide shot |
-| Setup → gameplay | Menu fades to black (0.28 s). The loading card ("Entering the dojang") appears, then the match canvas fades in (0.6 s). |
-| Gameplay → results | Dialog fades in and rises (0.3 s). |
-| Results → menu | Home fades in (0.6 s). |
-| Promotion | Belt band unrolls (0.7 s), knot fades in, title rises. |
+- **≥ 1280 px:** 96 px edge, 460 px column.
+- **1024–1279 px:** 64 px edge, 420 px column.
+- **Training on wide screens** (≥ 1180 × 600): the objective sits beside the list, and the scrim extends with it.
+- **Phone portrait (< 600 px):**
+  - The scrim runs bottom-up; the home menu stacks at the bottom with a 56 px wordmark.
+  - Sub-screens start at 18vh, so the hall stays visible above them.
+  - Settings use one column.
+- **Phone landscape (height ≤ 500 px):**
+  - 40 px wordmark, with the player shown top-right.
+  - The play modes sit in a column, and the secondary items in one row beneath them.
+  - Sub-screens use the left column.
+- **Everywhere:** safe-area insets are padded and text sizes are in rem, so OS text scaling works.
 
-Under reduced motion, all of the above become instant: there is no camera drift, no shadow-sparring, and the dust is static.
+## 3D backdrop integration
 
-## Live menu scene (`src/game/menu/MenuStage.ts`)
+- The live `MenuStage` (a single WebGL context, disposed before a match) sits at z 0. The scrim is one div in the menu shell; screens swap inside the shell.
+- The menu camera drift was reduced to a barely perceptible ±8 cm, and is static under reduced motion. No new lights, post-processing or assets were added.
 
-**What it reuses:** `buildDojang`, `createCharacter` and `FighterAnimator` are reused unchanged. A `CombatWorld` with `TrainingRules` drives two idle fighters that occasionally throw a technique out of range.
+## Gameplay HUD (restrained)
 
-**What it doesn't run:** no AI, input, HUD or audio.
+**Positions, sizes, touch controls and camera framing are unchanged.**
 
-**Cost and fallbacks:**
-- **One WebGL context.** It is disposed with `forceContextLoss()` before the match canvas mounts, so the menu and the match never hold two contexts.
-- **30 FPS cap**, through its own rAF loop.
-- **Pixel ratio** capped at 1.5 (high tier), 1.25 (medium) and 1 (low).
-- **Shadows** on the high tier only.
-- **Fog and a warm point light**; the hemisphere fill is lowered for contrast.
-- **Dust:** 160 points (70 on low), one draw call.
-- **Loading:** the fighter model is the same cached `fighter.glb` the match uses, so loading the menu scene also preloads the match.
-- **Fallbacks:**
-  - When WebGL is missing, context creation fails or the setting is off, a painted CSS backdrop is used instead; it is also shown while the scene loads.
-  - `?nomenu3d` forces the still backdrop.
+The changes are:
+- Plex numerals with tabular figures;
+- a top gradient instead of the clock and score plates;
+- 4 px corner bars beside the names, and score underlines in corner colour;
+- an off-white health bar;
+- toasts in Plex, inside a polite live region so score changes are announced.
 
-## Gameplay HUD (light touch)
+## Accessibility
 
-Sizes and layout are unchanged, so mobile coverage is unchanged. The changes:
-- the health bars use an amber gradient with a hairline frame;
-- the stamina bar gets a blue gradient;
-- the clock and points use serif numerals;
-- the clock gets a framed, darker plate;
-- round pips are diamonds;
-- referee call toasts use letter-spaced serif capitals with an amber sub-line.
-
-Controls, the touch layout, hitboxes, timing, scoring and AI are untouched.
+- **Focus:** a visible brass ring on every interactive element.
+- **Semantics:** real buttons and native radios. ↑/↓ move within menus, ←/→ within segmented controls, and Tab moves between groups.
+- **Colour:** corner colour is always paired with a name. Text is ≥ 4.5:1 over the scrim; sub-screens hold the scrim darker under the column.
+- **Reduced motion:** fades only.

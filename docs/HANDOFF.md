@@ -1,5 +1,15 @@
 # Handoff
 
+> **UI System implementation** is on `claude/amazing-galileo-4k6k1j`, branched from `main` f8cd39e after PR #6 merged. It implements the approved Claude Design package (tokens, fonts, components, screens).
+> - **Reference:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) covers the tokens, type roles, component inventory, screens, responsive rules and accessibility.
+> - **Code:** `src/tokens.css` (verbatim from the package), `src/fonts.css` with `src/assets/fonts` (built by `scripts/build-fonts.py`), `src/ui/kit.tsx`, and `src/ui/menu.css`. The screens are in `Menu.tsx`, `SettingsPanel.tsx`, `Overlays.tsx` and `Training.tsx`. Gameplay CSS lives in `src/styles.css`.
+> - **Flow changes:**
+>   - Training activities select first, and **Begin** starts them.
+>   - Promotion is inline on the results and summary screens; there is no separate dialog.
+>   - The pause menu's "Main menu" is now **Quit to menu**.
+>   - `scripts/e2e.mjs` was updated for these flows but not rerun.
+> - **Verification:** `scripts/menu-smoke.mjs`. Screenshots are in `docs/media/ui-system/`.
+
 > **Phase 7 (cinematic menu and UI refinement)** is on `claude/amazing-galileo-4k6k1j`, branched from `main` aeff806 after PR #5 merged.
 > - **New:** `src/game/menu/MenuStage.ts` (the live dojang behind the menu) and `src/ui/MenuBackdrop.tsx`. `src/ui/Menu.tsx` is rewritten.
 > - **Restyled:** the results, summary, promotion and loading screens, plus light HUD styling in `src/styles.css`.
