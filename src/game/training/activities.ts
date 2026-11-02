@@ -55,7 +55,7 @@ export const ACTIVITIES: Activity[] = [
     id: 'head5',
     kind: 'challenge',
     title: 'Head kick challenge',
-    brief: 'Land 5 valid head-height kicks in 40 seconds (hold E / Head).',
+    brief: 'Land 5 valid head-height kicks in 40 seconds.',
     seconds: 40,
     goal: 5,
     target: 'head',
