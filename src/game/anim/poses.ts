@@ -277,7 +277,8 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         pitch: -4 + j(2),
         twist: 6,
         lLeg: { yaw: -30, pole: dirYaw(-20), point: 0.15 },
-        rLeg: { p: v(-0.08, (head ? 0.74 : 0.62) + j(0.03), 0.26), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
+        // Knee drives straight up toward the target; the foot tucks under it.
+        rLeg: { p: v(-0.07, (head ? 0.78 : 0.66) + j(0.03), 0.2), pole: v(0, 0.65, 1), point: 0.75, yaw: -10 },
         rArm: { p: v(-0.16 + j(0.02), 0.1, 0.14) },
       });
       const extend = pose(chamber, {
@@ -321,6 +322,16 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         lArm: { p: v(0.18, 0.12, 0.26) },
         rArm: { p: v(-0.3, -0.05, -0.1), pole: v(-1, -0.5, 0) },
       });
+      // Knee rises in front first (still square), then turns over on the pivot.
+      const knee = pose(STANCE, {
+        hips: v(0.015, 0.885, 0.03),
+        yaw: -12 + j(4),
+        pitch: 0,
+        twist: 0,
+        lLeg: { yaw: 18, pole: dirYaw(12), point: 0.25 },
+        rLeg: { p: v(-0.14, (head ? 0.74 : 0.66) + j(0.02), 0.2), pole: v(0, 0.45, 1), point: 0.65, yaw: -12 },
+        rArm: { p: v(-0.16, 0.1, 0.14) },
+      });
       // Missed: the kick sweeps on across the body and the hips over-rotate.
       const follow = pose(extend, {
         yaw: 118,
@@ -331,8 +342,9 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
       });
       return [
         { t: 0, pose: STANCE },
-        { t: s(0.25), pose: load },
-        { t: s(0.7), pose: chamber },
+        { t: s(0.22), pose: load },
+        { t: s(0.5), pose: knee },
+        { t: s(0.8), pose: chamber },
         { t: a(0.5), pose: extend, ease: 'snap' },
         { t: a(1), pose: extend },
         ...recover(pose(chamber, { yaw: 40 }), extend, follow),
@@ -352,7 +364,8 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         roll: -12 + j(3),
         twist: -18,
         lLeg: { yaw: 120, pole: dirYaw(110), point: 0.15 },
-        rLeg: { p: v(-0.02, (head ? 0.92 : 0.8) + j(0.03), 0.08), pole: v(0.6, 0.6, 0.6), point: 0.25, yaw: 90 },
+        // Knee pulled across the chest, foot blade and heel aimed at the target.
+        rLeg: { p: v(0.01, (head ? 0.95 : 0.84) + j(0.03), 0.04), pole: v(0.7, 0.55, 0.45), point: 0.2, yaw: 90 },
         lArm: { p: v(0.18, 0.12, 0.26) },
         rArm: { p: v(-0.04, 0.2, 0.2) },
       });
@@ -386,7 +399,7 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         yaw: -32 + j(4),
         pitch: -5 + j(2),
         rLeg: { yaw: -62, pole: dirYaw(-52), point: 0.15 },
-        lLeg: { p: v(0.06, (head ? 0.74 : 0.62) + j(0.03), 0.36), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
+        lLeg: { p: v(0.06, (head ? 0.7 : 0.58) + j(0.03), 0.34), pole: v(0, 0.5, 1), point: 0.7, yaw: -10 },
         lArm: { p: v(0.18, 0.08, 0.2) },
       });
       const extend = pose(chamber, {
@@ -414,7 +427,7 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
         roll: 8 + j(3),
         twist: 10,
         rLeg: { yaw: -115, pole: dirYaw(-105), point: 0.2 },
-        lLeg: { p: v(0.36, (head ? 1.08 : 0.94) + j(0.03), 0.3), pole: v(0, 0.3, 1), point: 0.8, yaw: 0 },
+        lLeg: { p: v(0.32, (head ? 1.03 : 0.89) + j(0.03), 0.3), pole: v(0, 0.3, 1), point: 0.8, yaw: 0 },
         lArm: { p: v(0.2, 0.06, 0.12) },
       });
       const extend = pose(chamber, {
@@ -482,8 +495,10 @@ export function attackKeys(atk: AttackState, outcome: AttackOutcome = 'pending',
       // Spin clockwise (seen from above), kick straight back, finish the turn.
       const turn = pose(STANCE, {
         yaw: -120,
+        // Shoulders and head lead the hips through the turn.
+        twist: -22,
         hips: v(0, 0.86, 0.0),
-        look: 0.6,
+        look: 0.68,
         lLeg: { yaw: -150, pole: dirYaw(-150), point: 0.25 },
         rLeg: { p: v(-0.08, 0.2, -0.12), pole: v(0, 0.5, -1), point: 0.3 },
       });
@@ -527,7 +542,10 @@ export function reactionEnvelope(t: number, stun: number): number {
   if (t <= 0) return 0;
   if (t < rise) return smoothstep(t / rise);
   const k = clamp((t - rise) / Math.max(1, stun - rise), 0, 1);
-  return 1 - smoothstep(k);
+  // Late in the recovery the body rocks slightly past neutral and settles:
+  // a small balance correction instead of a flat return (0 at k = 0.6 and 1).
+  const correct = k > 0.6 ? 0.16 * Math.sin((Math.PI * (k - 0.6)) / 0.4) : 0;
+  return 1 - smoothstep(k) - correct;
 }
 
 export interface ReactionInfo {
