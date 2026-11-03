@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { mkdirSync } from 'fs';
 const [tag] = process.argv.slice(2);
 // Usage: node <script> <tag> [outDir]  (needs `npx vite preview --port 4173`)
 const out = process.argv[3] ?? 'artifacts/capture';
