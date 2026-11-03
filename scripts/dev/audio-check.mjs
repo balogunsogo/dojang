@@ -48,12 +48,12 @@ const b = await chromium.launch({ args: ['--autoplay-policy=user-gesture-require
     const [a, c] = s.world.fighters;
     a.x = 0; a.z = -1.6; a.yaw = 0; c.x = 0; c.z = 1.6; c.yaw = Math.PI; a.stamina = 100;
   };
-  const impacts = ['body', 'head', 'punch'];
+  const impacts = ['hogu', 'headgear', 'glove', 'body', 'head', 'punch'];
 
   const hit = await run('hit', inRange, 'KeyL');
-  check('landed roundhouse: whoosh + dobok snap + body impact, no block/whiff', hit.includes('whoosh') && hit.includes('snap') && hit.includes('body') && !hit.includes('block') && !hit.includes('whiff'), hit.join(','));
+  check('landed roundhouse: air + dobok cloth + recorded hogu impact + contact slap, no guard/whiff', hit.includes('air') && hit.includes('cloth-swish') && hit.includes('cloth-flick') && hit.includes('hogu') && hit.includes('slap') && !hit.includes('guard') && !hit.includes('whiff'), hit.join(','));
   const miss = await run('miss', far, 'KeyL');
-  check('missed roundhouse: whoosh + whiff, no impact or block', miss.includes('whoosh') && miss.includes('whiff') && !miss.some((n) => impacts.includes(n)) && !miss.includes('block'), miss.join(','));
+  check('missed roundhouse: air + whiff only, no impact or guard', miss.includes('air') && miss.includes('whiff') && !miss.some((n) => impacts.includes(n)) && !miss.includes('guard') && !miss.includes('slap'), miss.join(','));
   // Opponent holds guard for the block case.
   await p.evaluate(() => {
     const s = window.__dojang.session;
@@ -62,14 +62,18 @@ const b = await chromium.launch({ args: ['--autoplay-policy=user-gesture-require
   });
   await p.waitForTimeout(300);
   const blocked = await run('block', inRange, 'KeyK');
-  check('blocked front kick: whoosh + block, no impact', blocked.includes('whoosh') && blocked.includes('block') && !blocked.some((n) => impacts.includes(n)), blocked.join(','));
+  check('blocked front kick: guard recording + knock, no protector impact', blocked.includes('air') && blocked.includes('guard') && blocked.includes('knock') && !blocked.some((n) => impacts.includes(n)), blocked.join(','));
   await p.evaluate(() => {
     const s = window.__dojang.session;
     s.ai.think = () => ({ moveX: 0, moveZ: 0, attack: null, guard: false, dash: false, switchStance: false, height: 'body' });
   });
   await p.waitForTimeout(300);
   const punch = await run('punch', inRange, 'KeyJ');
-  check('landed punch: fast whoosh + punch impact (no dobok snap)', punch.includes('whooshFast') && punch.includes('punch') && !punch.includes('snap'), punch.join(','));
+  check('landed punch: fast air + glove impact (no kick flick)', punch.includes('whooshFast') && punch.includes('glove') && !punch.includes('cloth-flick'), punch.join(','));
+  const rec = await p.evaluate(() => ['hogu', 'headgear', 'glove', 'guard', 'mat', 'cloth-swish'].map((n) => [n, window.__audio['bank'].get(n)?.[0]?.sampleRate]));
+  check('recordings decoded (not the synth fallback, which renders at 32 kHz)', rec.every(([, sr]) => sr && sr !== 32000), JSON.stringify(rec));
+  const pan = await p.evaluate(() => window.__audio.pos.map((q) => +q.pan.toFixed(2)));
+  check('fighters are placed in the stereo field', pan[0] !== pan[1], JSON.stringify(pan));
 
   // Settings: mute and volume through the pause menu.
   await p.keyboard.press('Escape');
