@@ -3,6 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { FighterStats } from '../combat/Fighter';
+import { FACES } from './face';
 import { buildGear } from './gear';
 
 export const FIGHTER_URL = `${import.meta.env?.BASE_URL ?? '/'}assets/fighter.glb`;
@@ -95,7 +96,15 @@ export function createCharacter(gltf: GLTF, def: CharacterDef, corner: 'chung' |
   // Dobok, belt, hogu, headgear, gloves and foot protectors: one extra
   // skinned mesh on the same skeleton (see gear.ts).
   const lin = (hex: string) => new THREE.Color(hex).convertSRGBToLinear();
-  const gearGeo = buildGear(skinned, samples, { dobok: lin(def.dobok), skin: lin(def.skin), gear: lin(CORNER_COLORS[corner]), belt: lin(BELT_COLORS[belt]) });
+  const gearGeo = buildGear(skinned, samples, {
+    dobok: lin(def.dobok),
+    skin: lin(def.skin),
+    gear: lin(CORNER_COLORS[corner]),
+    belt: lin(BELT_COLORS[belt]),
+    hair: lin(def.id === 'hana' ? '#20140f' : '#151110'),
+    face: FACES[def.id],
+    ponytail: def.id === 'hana',
+  });
   const gearMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, side: THREE.DoubleSide });
   const gearMesh = new THREE.SkinnedMesh(gearGeo, gearMat);
   gearMesh.name = 'gear';
@@ -171,6 +180,16 @@ function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: '
     // Positions are quantized; the dequantization lives in the inverse bind
     // matrices, so go through the dominant bone to get bind-pose metres.
     p.fromBufferAttribute(pos, i).applyMatrix4(mesh.bindMatrix).applyMatrix4(boneMats[best]);
+    // Recess the front of the featureless head so the sculpted face mask
+    // (face.ts) always sits in front of it.
+    if (bone === 'DEF-head') {
+      const ry = p.y - head.y;
+      const k = THREE.MathUtils.smoothstep(p.z, 0.0, 0.06) * THREE.MathUtils.smoothstep(ry, -0.04, 0.0) * (1 - THREE.MathUtils.smoothstep(ry, 0.17, 0.21)) * (1 - THREE.MathUtils.smoothstep(Math.abs(p.x), 0.06, 0.085));
+      if (k > 0) {
+        const scale = new THREE.Vector3().setFromMatrixScale(boneMats[best]).x;
+        pos.setZ(i, pos.getZ(i) - (0.016 * k) / scale);
+      }
+    }
     samples.push({ p: p.clone(), bone });
     if (bone === 'DEF-head') {
       // Face (the headgear is a separate shell with an opening); hair at the nape.

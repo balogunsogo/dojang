@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addFace, addPonytail, type FaceParams } from './face';
 
 /**
  * Procedural dobok and sparring equipment, fitted to the CC0 mannequin.
@@ -16,6 +17,9 @@ export interface GearColors {
   skin: THREE.Color;
   gear: THREE.Color;
   belt: THREE.Color;
+  hair: THREE.Color;
+  face: FaceParams;
+  ponytail: boolean;
 }
 
 type W = [number, number][]; // [boneIndex, weight]
@@ -336,6 +340,44 @@ export function buildGear(mesh: THREE.SkinnedMesh, samples: Sample[], colors: Ge
     }
   }
 
+  // ── Face (sculpted mask + eyes) and headgear ─────────────────────────────
+  const iHead = bi('DEF-head');
+  const iNeck = bi('DEF-neck');
+  const headS = samples.filter((s) => s.bone === 'DEF-head');
+  const hlo = new THREE.Vector3(9, 9, 9);
+  const hhi = new THREE.Vector3(-9, -9, -9);
+  for (const s of headS) {
+    hlo.min(s.p);
+    hhi.max(s.p);
+  }
+  const headC = new THREE.Vector3(0, (hlo.y + hhi.y) / 2, (hlo.z + hhi.z) / 2);
+  const headR = new THREE.Vector3((hhi.x - hlo.x) / 2, (hhi.y - hlo.y) / 2, (hhi.z - hlo.z) / 2);
+  // Real front profile of the head (the egg is flat-fronted, not ellipsoidal).
+  const frontAt = (y: number) => {
+    let z = -1;
+    for (const s of headS) if (Math.abs(s.p.y - y) < 0.03 && Math.abs(s.p.x) < 0.04) z = Math.max(z, s.p.z);
+    return z;
+  };
+  const widthAt = (y: number) => {
+    let w = 0;
+    for (const s of headS) if (Math.abs(s.p.y - y) < 0.02) w = Math.max(w, Math.abs(s.p.x));
+    return w;
+  };
+  const prof: [number, number, number][] = [];
+  for (let y = hlo.y + 0.005; y <= hhi.y; y += 0.01) prof.push([y, frontAt(y), widthAt(y)]);
+  const interp = (y: number, k: 1 | 2) => {
+    const i = THREE.MathUtils.clamp(Math.floor((y - prof[0][0]) / 0.01), 0, prof.length - 2);
+    const t = THREE.MathUtils.clamp((y - prof[i][0]) / 0.01, 0, 1);
+    return THREE.MathUtils.lerp(prof[i][k], prof[i + 1][k], t);
+  };
+  const faceSurface = (x: number, y: number) => {
+    const fz = Math.max(interp(y, 1), headC.z);
+    const w = Math.max(0.03, interp(y, 2)) + 0.006;
+    return headC.z + (fz - headC.z) * Math.sqrt(Math.max(0, 1 - (x / w) ** 2)) - 0.004;
+  };
+  addFace(B, { c: headC, r: headR }, iHead, colors.face, colors.skin, colors.hair, faceSurface);
+  if (colors.ponytail) addPonytail(B, { c: headC, r: headR }, iHead, iNeck, colors.hair);
+
   // ── Headgear: padded shell, open face, ear pads, chin strap ──────────────
   {
     const head = samples.filter((s) => s.bone === 'DEF-head');
@@ -489,3 +531,4 @@ function ellipsoid(B: Builder, c: THREE.Vector3, r: THREE.Vector3, lat: number, 
   }
   for (let i = 0; i < lat; i++) for (let k = 0; k < lon; k++) B.quad(grid[i][k], grid[i][k + 1], grid[i + 1][k + 1], grid[i + 1][k]);
 }
+
