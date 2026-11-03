@@ -113,7 +113,11 @@ export class FootPlanner {
           f.sx = f.px;
           f.sz = f.pz;
           f.syaw = f.pyaw;
-          f.height = Math.min(0.09, 0.035 + dPos * 0.18);
+          // Turning in place pivots on the ball of the foot (no lift);
+          // real repositioning lifts the foot in a low glide.
+          const pivot = dPos < 0.045;
+          f.height = pivot ? 0 : Math.min(0.08, 0.03 + dPos * 0.16);
+          if (pivot) f.dur = Math.max(0.12, dur * 0.8);
           this.steps++;
           break;
         }
