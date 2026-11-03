@@ -97,6 +97,11 @@ export class FighterAnimator {
   private accS = 0;
   /** Smoothed bounce amplitude (wanders between lively and settled). */
   private bounceAmp = 0.018;
+  /** Animator-owned bounce phase (per-fighter tempo; deterministic given dt). */
+  private phase = 0;
+  private readonly tempo: number;
+  /** 0 right after a technique/reaction, easing to 1: the bounce resumes gradually. */
+  private resume = 1;
   /** Settle spring: the hips dip when a stepping foot lands or the fighter stops. */
   private dip = 0;
   private dipV = 0;
@@ -109,6 +114,9 @@ export class FighterAnimator {
   constructor(group: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[], seed = 1) {
     this.group = group;
     this.seed = seed * 12.9898;
+    // Each fighter has a slightly different natural tempo.
+    const fr = Math.sin(seed * 91.7) * 43758.5453;
+    this.tempo = 0.92 + 0.16 * (fr - Math.floor(fr));
     const b = {} as Record<keyof typeof BONE, THREE.Bone>;
     for (const k of Object.keys(BONE) as (keyof typeof BONE)[]) b[k] = findBone(model, BONE[k]);
     this.b = b;
@@ -171,6 +179,8 @@ export class FighterAnimator {
       ? { kind: 'pose', key: 'override', pose: this.overridePose, planted: false }
       : this.pickSource(f, alpha, dt);
     if (src.key !== this.sourceKey) {
+      // Coming back from a technique or reaction: settle first, bounce later.
+      if (src.key === 'loco' && /^(attack|hit|block|down|switch)/.test(this.sourceKey)) this.resume = 0;
       if (!this.first) {
         this.snapshot();
         this.fadeLen = this.fadeFor(src.key);
@@ -299,6 +309,10 @@ export class FighterAnimator {
     this.velS = ns;
     const gTarget = f.state === 'guard' || f.state === 'blockstun' ? 1 : 0;
     this.guardW += (gTarget - this.guardW) * (1 - Math.exp(-dt * 18));
+    // About 1.6-1.9 bounces per second, wandering slightly; quicker when moving.
+    const sp = Math.hypot(this.velF, this.velS);
+    this.phase += dt * 5.4 * this.tempo * (0.94 + 0.06 * noise(this.time * 0.3, this.seed + 11)) * (1 + 0.15 * clamp(sp, 0, 1));
+    this.resume = Math.min(1, this.resume + dt / 0.9);
   }
 
   /**
@@ -311,33 +325,44 @@ export class FighterAnimator {
     const t = this.time;
     const sd = this.seed;
     const speed = Math.hypot(this.velF, this.velS);
-    // Bounce: TKD fighters bounce on the balls of the feet; the rhythm and
-    // depth drift so it never reads as a loop.
+    // Bounce: light and grounded. A TKD bounce is mostly knee and ankle
+    // flexion with the feet barely unloading, not a jump; its rhythm and
+    // depth wander, it rests now and then, and it gives way to footwork.
     const liveliness = 0.5 + 0.5 * noise(t * 0.35, sd + 4);
-    // Travelling flattens the bounce: the steps carry the rhythm instead.
-    const travel = clamp(speed / 1.2, 0, 1);
-    const ampTarget = (g > 0.5 ? 0.007 : 0.012 + 0.012 * liveliness) * (f.stamina < 25 ? 0.6 : 1) * (1 - 0.45 * travel);
-    this.bounceAmp += (ampTarget - this.bounceAmp) * 0.05;
-    const ph = f.stepPhase * (0.92 + 0.08 * noise(t * 0.2, sd));
-    // Smooth bounce (no hard cusp at the bottom): knees flex as the hips
-    // drop, and the body rises onto the balls of the feet.
+    const travel = clamp(speed / 0.9, 0, 1);
+    const stepping = this.planner.active && (this.planner.out[0].stepT > 0 || this.planner.out[1].stepT > 0) ? 1 : 0;
+    // Slow activity envelope: phases of steady rhythm and of near-stillness.
+    const activity = smoothstep(clamp(0.5 + 0.8 * noise(t * 0.32, sd + 12), 0, 1));
+    const ampTarget =
+      (g > 0.5 ? 0.0035 : 0.0068 + 0.0045 * liveliness) *
+      (0.3 + 0.7 * activity) *
+      (f.stamina < 25 ? 0.6 : 1) *
+      (1 - 0.85 * travel) *
+      (1 - 0.5 * stepping) *
+      smoothstep(this.resume);
+    this.bounceAmp += (ampTarget - this.bounceAmp) * 0.06;
+    const ph = this.phase;
+    const amp = this.bounceAmp;
+    // Smooth compression cycle: knees load as the hips drop.
     const b = 0.5 - 0.5 * Math.cos(2 * ph);
-    out.hips[1] += b * this.bounceAmp - 0.008;
-    // Weight rocks between the feet every other bounce; the shoulders
-    // counter-rotate a little against the hips.
-    const rock = Math.sin(ph) * (1 - 0.5 * g) * (1 - 0.6 * travel);
-    out.hips[2] += rock * 0.014;
-    out.hips[0] += rock * 0.006;
-    out.yaw += rock * 2;
-    out.twist -= rock * 2.6;
-    // Heels lift at the top of each bounce, more on the unweighted foot.
-    const heel = b * clamp(this.bounceAmp * 14, 0, 0.25);
-    out.lLeg.point = Math.max(out.lLeg.point, heel * (1 + 0.7 * Math.max(0, -rock)));
-    out.rLeg.point = Math.max(out.rLeg.point, heel * (1.2 + 0.5 * Math.max(0, rock)));
-    // Guard hands ride the bounce a beat late.
-    const lag = (0.5 - 0.5 * Math.cos(2 * ph - 0.9)) * this.bounceAmp * 0.6;
-    out.lArm.p = [out.lArm.p[0], out.lArm.p[1] - lag, out.lArm.p[2]];
-    out.rArm.p = [out.rArm.p[0], out.rArm.p[1] - lag, out.rArm.p[2]];
+    out.hips[1] += (b - 0.6) * amp;
+    out.pitch += (0.5 - b) * amp * 40; // chest settles slightly with each landing
+    // Weight drifts between the feet (irregular, small); shoulders counter a little.
+    const rock = (0.6 * Math.sin(ph + 0.4 * noise(t * 0.3, sd + 13)) * activity + 0.4 * noise(t * 0.5, sd + 14)) * (1 - 0.5 * g) * (1 - 0.7 * travel);
+    out.hips[2] += rock * 0.008;
+    out.hips[0] += rock * 0.003;
+    out.yaw += rock * 1.2;
+    out.twist -= rock * 1.4;
+    // Heels: the loaded foot stays down, the unloaded one rises a little,
+    // and the rear heel leads the front one, so the feet never lift in sync.
+    const load = 0.5 + 0.5 * rock; // 1 = weight on the front foot
+    const k = clamp(amp * 22, 0, 0.22);
+    const bFront = 0.5 - 0.5 * Math.cos(2 * ph - 0.35);
+    out.lLeg.point = Math.max(out.lLeg.point, bFront * k * (0.35 + 0.9 * (1 - load)));
+    out.rLeg.point = Math.max(out.rLeg.point, 0.08 + b * k * (0.45 + 0.8 * load));
+    // Guard hands follow the body with their own lag, never in lockstep.
+    out.lArm.p = [out.lArm.p[0], out.lArm.p[1] - (0.5 - 0.5 * Math.cos(2 * ph - 1.1)) * amp * 0.45, out.lArm.p[2]];
+    out.rArm.p = [out.rArm.p[0], out.rArm.p[1] - (0.5 - 0.5 * Math.cos(2 * ph - 1.6)) * amp * 0.35, out.rArm.p[2]];
     // Breathing (faster when tired) and slow weight shift between the feet.
     const tired = f.stamina < 30 ? 1 : 0;
     const breath = Math.sin(t * (1.6 + tired * 1.6) + sd);

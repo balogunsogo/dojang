@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addFace, addPonytail, type FaceParams } from './face';
 
 /**
  * Procedural dobok and sparring equipment, fitted to the CC0 mannequin.
@@ -16,6 +17,9 @@ export interface GearColors {
   skin: THREE.Color;
   gear: THREE.Color;
   belt: THREE.Color;
+  hair: THREE.Color;
+  face: FaceParams;
+  ponytail: boolean;
 }
 
 type W = [number, number][]; // [boneIndex, weight]
@@ -336,56 +340,129 @@ export function buildGear(mesh: THREE.SkinnedMesh, samples: Sample[], colors: Ge
     }
   }
 
-  // ── Headgear: padded shell, open face, ear pads, chin strap ──────────────
+  // ── Face (sculpted mask + eyes) and headgear ─────────────────────────────
+  const iHead = bi('DEF-head');
+  const iNeck = bi('DEF-neck');
+  const headS = samples.filter((s) => s.bone === 'DEF-head');
+  const hlo = new THREE.Vector3(9, 9, 9);
+  const hhi = new THREE.Vector3(-9, -9, -9);
+  for (const s of headS) {
+    hlo.min(s.p);
+    hhi.max(s.p);
+  }
+  const headC = new THREE.Vector3(0, (hlo.y + hhi.y) / 2, (hlo.z + hhi.z) / 2);
+  const headR = new THREE.Vector3((hhi.x - hlo.x) / 2, (hhi.y - hlo.y) / 2, (hhi.z - hlo.z) / 2);
+  // Real front profile of the head (the egg is flat-fronted, not ellipsoidal).
+  const frontAt = (y: number) => {
+    let z = -1;
+    for (const s of headS) if (Math.abs(s.p.y - y) < 0.03 && Math.abs(s.p.x) < 0.04) z = Math.max(z, s.p.z);
+    return z;
+  };
+  const widthAt = (y: number) => {
+    let w = 0;
+    for (const s of headS) if (Math.abs(s.p.y - y) < 0.02) w = Math.max(w, Math.abs(s.p.x));
+    return w;
+  };
+  const prof: [number, number, number][] = [];
+  for (let y = hlo.y + 0.005; y <= hhi.y; y += 0.01) prof.push([y, frontAt(y), widthAt(y)]);
+  const interp = (y: number, k: 1 | 2) => {
+    const i = THREE.MathUtils.clamp(Math.floor((y - prof[0][0]) / 0.01), 0, prof.length - 2);
+    const t = THREE.MathUtils.clamp((y - prof[i][0]) / 0.01, 0, 1);
+    return THREE.MathUtils.lerp(prof[i][k], prof[i + 1][k], t);
+  };
+  const faceSurface = (x: number, y: number) => {
+    const fz = Math.max(interp(y, 1), headC.z);
+    const w = Math.max(0.03, interp(y, 2)) + 0.006;
+    return headC.z + (fz - headC.z) * Math.sqrt(Math.max(0, 1 - (x / w) ** 2)) - 0.004;
+  };
+  addFace(B, { c: headC, r: headR }, iHead, colors.face, colors.skin, colors.hair, faceSurface);
+  if (colors.ponytail) addPonytail(B, { c: headC, r: headR }, iHead, iNeck, colors.hair);
+
   {
-    const head = samples.filter((s) => s.bone === 'DEF-head');
-    const lo = new THREE.Vector3(9, 9, 9);
-    const hi = new THREE.Vector3(-9, -9, -9);
-    for (const s of head) {
-      lo.min(s.p);
-      hi.max(s.p);
-    }
-    const ctr = lo.clone().add(hi).multiplyScalar(0.5);
-    ctr.y = hi.y - (hi.x - lo.x) * 0.62;
-    const rx = (hi.x - lo.x) / 2 + 0.02;
-    const ry = hi.y - ctr.y + 0.024;
-    const rz = (hi.z - lo.z) / 2 + 0.018;
-    const iHead = bi('DEF-head');
-    const iNeck = bi('DEF-neck');
-    const LAT = 14;
-    const LON = 28;
+    // WT-style sparring headgear: padded shell from crown to jaw, open face
+    // from brow to chin, raised forehead pad, segmented crown, domed ear pads
+    // with holes, a thick rolled rim, chin strap and rear fastening.
+    const gear = colors.gear;
+    const ctr = headC.clone();
+    const rx = headR.x + 0.024;
+    const ry = headR.y + 0.026;
+    const rz = headR.z + 0.022;
+    const browTop = headC.y + 0.058; // lower edge of the forehead pad
+    const halfW = 0.066; // face opening half-width
+    const lowY = headC.y - 0.118; // jaw line (bottom of the cheek pads)
+    const LAT = 18;
+    const LON = 32;
+    const maxTheta = Math.acos(Math.max(-1, (lowY - ctr.y) / ry));
     const grid: number[][] = [];
-    const maxTheta = 2.15; // from the crown down past the jaw line
+    const isOpen = (p: THREE.Vector3) => p.z > ctr.z + 0.025 && p.y < browTop && Math.abs(p.x) < halfW;
+    const centers: THREE.Vector3[][] = [];
     for (let i = 0; i <= LAT; i++) {
       const th = (i / LAT) * maxTheta;
       const row: number[] = [];
+      const crow: THREE.Vector3[] = [];
       for (let k = 0; k <= LON; k++) {
         const ph = (k / LON) * Math.PI * 2; // 0 = back (-z)
         const dx = Math.sin(th) * Math.sin(ph);
         const dz = -Math.sin(th) * Math.cos(ph);
         const dy = Math.cos(th);
-        // Padded crown: thicker rolls on top, thinner at the cheeks.
-        const roll = 1 + 0.05 * Math.max(0, Math.cos(th * 3)) * (dy > 0.3 ? 1 : 0);
+        // Segmented crown pads (seams pressed in), raised forehead pad.
+        const seam = dy > 0.25 ? Math.exp(-((Math.sin(ph * 3) / 0.12) ** 2)) : 0;
+        const fore = dz > 0.55 && dy > 0.1 && dy < 0.62 ? 0.07 * Math.sin(((dy - 0.1) / 0.52) * Math.PI) : 0;
+        const roll = 1 + fore - 0.035 * seam + 0.02 * Math.max(0, dy);
         const p = new THREE.Vector3(ctr.x + dx * rx * roll, ctr.y + dy * ry * roll, ctr.z + dz * rz * roll);
-        const ear = Math.abs(dx) > 0.82 && dy < 0.15 && dy > -0.55;
-        const crownSeam = dy > 0.35 && Math.abs(Math.sin(ph * 2)) < 0.08;
-        const rim = i === LAT;
-        const f = rim ? 0.6 : ear ? 0.72 : crownSeam ? 0.78 : 1;
-        row.push(B.vert(p, shade(colors.gear, f), i > LAT - 2 && dz < 0 ? [[iHead, 0.7], [iNeck, 0.3]] : [[iHead, 1]]));
+        const earD = Math.hypot(dz / 0.35, (p.y - headC.y) / 0.04);
+        const f = seam > 0.5 ? 0.8 : Math.abs(dx) > 0.88 && earD < 1 ? 0.78 : i === LAT ? 0.62 : fore > 0.03 ? 1.04 : 1;
+        row.push(B.vert(p, shade(gear, f), i > LAT - 3 && dz < 0 ? [[iHead, 0.75], [iNeck, 0.25]] : [[iHead, 1]]));
+        crow.push(p);
       }
       grid.push(row);
+      centers.push(crow);
     }
     for (let i = 0; i < LAT; i++)
       for (let k = 0; k < LON; k++) {
-        // Face opening: skip quads in front between brow and chin.
-        const th = ((i + 0.5) / LAT) * maxTheta;
-        const ph = ((k + 0.5) / LON) * Math.PI * 2;
-        const dz = -Math.sin(th) * Math.cos(ph);
-        const dx = Math.sin(th) * Math.sin(ph);
-        const dy = Math.cos(th);
-        if (dz > 0.42 && dy < 0.42 && Math.abs(dx) < 0.62) continue;
+        const m = centers[i][k].clone().add(centers[i + 1][k + 1]).multiplyScalar(0.5);
+        if (isOpen(m)) continue;
         B.quad(grid[i][k], grid[i + 1][k], grid[i + 1][k + 1], grid[i][k + 1]);
       }
+
+    // Shell surface point (front) for the rim and straps.
+    const shellZ = (x: number, y: number) => {
+      const k = 1 - ((x - ctr.x) / rx) ** 2 - ((y - ctr.y) / ry) ** 2;
+      return ctr.z + rz * Math.sqrt(Math.max(0.02, k));
+    };
+    // Rolled rim around the opening: shows the padding thickness.
+    const loop: THREE.Vector3[] = [];
+    const corner = 0.022;
+    const pushPt = (x: number, y: number) => loop.push(new THREE.Vector3(x, y, shellZ(x, y) - 0.004));
+    for (let y = lowY + 0.004; y < browTop - corner; y += 0.012) pushPt(-halfW, y);
+    for (let a = 0; a <= 6; a++) {
+      const t = (a / 6) * (Math.PI / 2);
+      pushPt(-halfW + corner - Math.cos(t) * corner, browTop - corner + Math.sin(t) * corner);
+    }
+    for (let x = -halfW + corner + 0.012; x < halfW - corner; x += 0.012) pushPt(x, browTop);
+    for (let a = 0; a <= 6; a++) {
+      const t = (a / 6) * (Math.PI / 2);
+      pushPt(halfW - corner + Math.sin(t) * corner, browTop - corner + Math.cos(t) * corner);
+    }
+    for (let y = browTop - corner - 0.012; y > lowY; y -= 0.012) pushPt(halfW, y);
+    tube(B, loop, 0.012, 8, shade(gear, 0.86), [[iHead, 1]], ctr);
+
+    // Domed ear pads with a dark hearing hole.
+    for (const sgn of [-1, 1]) {
+      const ec = new THREE.Vector3(sgn * (rx + 0.004), headC.y - 0.005, ctr.z - 0.01);
+      dome(B, ec, new THREE.Vector3(sgn, 0, 0), 0.032, 0.012, (r01) => shade(gear, r01 < 0.28 ? 0.22 : r01 < 0.4 ? 0.6 : 0.9), [[iHead, 1]]);
+    }
+    // Chin strap: from the jaw ends of the rim, under the chin.
+    const strapPts: THREE.Vector3[] = [];
+    for (let a = 0; a <= 10; a++) {
+      const t = a / 10;
+      const x = -halfW + t * halfW * 2;
+      const sag = Math.sin(t * Math.PI);
+      strapPts.push(new THREE.Vector3(x * (1 - 0.35 * sag), lowY - 0.008 - sag * 0.03, shellZ(x, lowY) - 0.01 - sag * 0.005));
+    }
+    tube(B, strapPts, 0.006, 6, new THREE.Color(0.06, 0.06, 0.07), [[iHead, 1]], ctr);
+    // Rear fastening: hook-and-loop band at the back of the head.
+    box(B, new THREE.Vector3(0, headC.y - 0.065, ctr.z - rz - 0.004), new THREE.Vector3(0.07, 0.028, 0.01), new THREE.Color(0.07, 0.07, 0.08), [[iHead, 0.75], [iNeck, 0.25]]);
   }
 
   // ── Hand and foot protectors ───────────────────────────────────────────
@@ -488,4 +565,44 @@ function ellipsoid(B: Builder, c: THREE.Vector3, r: THREE.Vector3, lat: number, 
     grid.push(row);
   }
   for (let i = 0; i < lat; i++) for (let k = 0; k < lon; k++) B.quad(grid[i][k], grid[i][k + 1], grid[i + 1][k + 1], grid[i + 1][k]);
+}
+
+/** Tube along a polyline (rims, straps); the ring basis faces away from `center`. */
+function tube(B: Builder, pts: THREE.Vector3[], r: number, seg: number, col: THREE.Color, w: W, center: THREE.Vector3) {
+  const rings: number[][] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const t = pts[Math.min(pts.length - 1, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize();
+    const out = pts[i].clone().sub(center);
+    out.addScaledVector(t, -out.dot(t)).normalize();
+    const side = t.clone().cross(out).normalize();
+    const ring: number[] = [];
+    for (let k = 0; k <= seg; k++) {
+      const a = (k / seg) * Math.PI * 2;
+      ring.push(B.vert(pts[i].clone().addScaledVector(out, Math.cos(a) * r).addScaledVector(side, Math.sin(a) * r), col, w));
+    }
+    rings.push(ring);
+  }
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < seg; k++) B.quad(rings[i][k], rings[i + 1][k], rings[i + 1][k + 1], rings[i][k + 1]);
+}
+
+/** Shallow dome facing `axis` (ear pads); col gets the normalised radius 0..1. */
+function dome(B: Builder, c: THREE.Vector3, axis: THREE.Vector3, r: number, h: number, col: (r01: number) => THREE.Color, w: W) {
+  const u = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const v = axis.clone().cross(u).normalize();
+  u.copy(v).cross(axis).normalize();
+  const RINGS = 5;
+  const SEG = 14;
+  const rows: number[][] = [];
+  for (let i = 0; i <= RINGS; i++) {
+    const r01 = i / RINGS;
+    const row: number[] = [];
+    const lift = h * Math.cos((r01 * Math.PI) / 2) * (r01 < 0.28 ? 0.4 : 1);
+    for (let k = 0; k <= SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      const p = c.clone().addScaledVector(u, Math.cos(a) * r * r01).addScaledVector(v, Math.sin(a) * r * r01).addScaledVector(axis, lift);
+      row.push(B.vert(p, col(r01), w));
+    }
+    rows.push(row);
+  }
+  for (let i = 0; i < RINGS; i++) for (let k = 0; k < SEG; k++) B.quad(rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]);
 }
