@@ -23,6 +23,8 @@ const params = new URLSearchParams(location.search);
 
 if (params.get('lab') === 'poses') {
   import('./lab/poseLab').then((m) => m.runPoseLab(root));
+} else if (params.get('lab') === 'sounds') {
+  import('./lab/soundLab').then((m) => m.runSoundLab(root));
 } else if (params.get('lab') === 'motion') {
   import('./lab/motionLab').then((m) => m.runMotionLab(root));
 } else {

@@ -30,6 +30,27 @@ Every asset shipped in the repository or generated at runtime is listed here wit
 
 Built by `scripts/build-fonts.py` (fontTools): the Latin files are copied unchanged; the Korean faces are subset to the Hangul the DOM renders (도장 김재원 박하나 청 홍 태권), with matching `unicode-range` in `src/fonts.css`, so any other Hangul falls back to the system Korean font. The OFL permits redistribution and modification with the software (the fonts are not sold on their own). **Review note:** the OFL treats subsetting as a modification, and IBM Plex declares "Plex" as a Reserved Font Name. The Korean subset files here are referenced under the original family names, the same practice Fontsource and Google Fonts use for their own subset files. If strict Reserved-Font-Name handling is required, rename the two `plex-sans-kr` faces' family (e.g. `DojangSansKR`) in `src/fonts.css` and the font-name tables; nothing else depends on the name.
 
+### Audio recordings — `public/audio/*.mp3` (20 files, 72 KB total; Phase 9.1)
+
+All from **Kenney** (www.kenney.nl), licence **CC0 1.0** (public domain dedication; commercial use and redistribution allowed; credit optional and given). The packs' own licence texts are in `public/audio/LICENSE-kenney.txt`.
+
+Retrieved from the `series-ai/jam-ready-assets` mirror, which vendors the complete packs together with Kenney's `License.txt`. Each original was verified against the SHA-256 recorded in that repository's Git LFS pointer (first 12 hex characters below).
+
+**Processing (ffmpeg):** downmix to mono, 32 kHz, trailing silence trimmed, 10 ms end fade, MP3 VBR q4. At load time the game additionally high-passes each group (24 dB/oct at 60–300 Hz), trims leading silence and normalises the peak. The original sounds are otherwise unaltered.
+
+| Game file(s) | Pack | Original file(s) (SHA-256 prefix) | Used for |
+|---|---|---|---|
+| `hogu-1…5` | Impact Sounds 1.0 | `impactPunch_heavy_000…004.ogg` (ff099bdcaffc, dd3cb705f462, e4644c152f34, 688d327fe487, 2f6add56716d) | Body kick on the trunk protector; weight layer; fall; knockout |
+| `headgear-1…3` | Impact Sounds 1.0 | `impactPunch_medium_000/001/003.ogg` (c85dd74a7752, d47307d8bf17, 7504b65f5a26) | Head kick on the headgear |
+| `glove-1…2` | Impact Sounds 1.0 | `impactPunch_medium_002/004.ogg` (d01459504998, fea5246cd91f) | Punch (glove on protector) |
+| `guard-1…3` | Impact Sounds 1.0 | `impactSoft_medium_000/002/004.ogg` (976b7a3ff7f6, 3c1fce0d7b26, 3b2d3d29f728) | Kick or punch into the guard |
+| `mat-1…3` | Impact Sounds 1.0 | `footstep_carpet_000/001/003.ogg` (0147b7bd6ceb, a79861f48e7f, 14465fb482a2); 002 and 004 are byte-identical duplicates and were skipped | Foot plants, landings, dash, fall |
+| `cloth-swish-1…2` | RPG Audio 1.0 | `cloth2.ogg`, `cloth4.ogg` (0ddc67e4cdf0, 319705aab579) | Dobok moving into a kick or punch |
+| `cloth-settle-1` | RPG Audio 1.0 | `cloth3.ogg` (05c08d809354) | Dobok settling after a landing or fall |
+| `cloth-flick-1` | RPG Audio 1.0 | `clothBelt2.ogg` (0478e09c1e86) | Dobok flick at full kick extension |
+
+**No voice recordings are used.** The breath exhale is synthesized noise, unchanged from Phase 9.
+
 ## Animation provenance
 
 | Motion | Source | Status |
@@ -60,7 +81,7 @@ The procedural kicks are an intentional, documented choice: the motion is Taekwo
 | Dojang geometry, mats, beams, bags, belt rack | Three.js primitives | Original work |
 | Dobok (jacket, trousers, sleeves), belt, hogu, headgear, gloves, foot protectors (Phase 8) | Procedural skinned geometry in `src/game/render/gear.ts`, fitted to the CC0 mannequin's own bind-pose vertices and skinned to its skeleton | Original work (derived only from the CC0 mannequin's dimensions) |
 | Stylized faces (sculpted mask, eyes, lids, brows, mouth), ponytail; WT-style headgear (Phase 8.1) | Procedural geometry in `src/game/render/face.ts` and `gear.ts`, rigid on the head bone | Original work |
-| Sound effects (whoosh, body/head impact, block, bell, footsteps, UI click, training cues, fanfare, stamina warning, thud, room tone) | Web Audio synthesis in `src/game/audio/AudioEngine.ts` | Original work |
+| Synthesized sound layers (Phase 9/9.1): kick and punch air, contact slap, guard knock, whiffs, pivot scuff, dash slide, breath exhale, bell, timer tone, scoring blips, gam-jeom buzz, deciding-round drum, victory/defeat, training cues, gong, menu cues, room tone and room reflection; plus synth fallbacks for every recorded layer | Rendered in code (`src/game/audio/AudioEngine.ts`, `dsp.ts`, `legacy9.ts`) into in-memory buffers | Original work |
 | Training equipment (paddles, trunk protectors, mats, kick shield), target ring, dobok fabric shading | Three.js primitives and vertex colors | Original work |
 | Hit flashes, blob shadows | Three.js primitives | Original work |
 

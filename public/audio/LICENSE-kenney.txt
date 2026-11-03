@@ -1,0 +1,50 @@
+Audio recordings in this folder are derived from two CC0 packs by Kenney (www.kenney.nl): trailing silence trimmed, a 10 ms end fade, downmixed to mono 32 kHz MP3. Credit is optional under CC0; it is given here and in docs/ASSET_MANIFEST.md. Their licence files follow.
+
+=== Impact Sounds (1.0) ===
+	
+
+	Impact Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 19-12-2019
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL
+=== RPG Audio (1.0) ===
+	
+
+	RPG Audio (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 17-03-2014
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL

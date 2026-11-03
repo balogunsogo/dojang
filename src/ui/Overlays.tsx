@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { audio } from '../game/audio/AudioEngine';
 import type { GameSession } from '../game/GameSession';
 import { BELT_ORDER, BELT_REQUIREMENTS, nextBelt } from '../game/progress/progress';
 import { useGameStore } from '../store/useGameStore';
@@ -109,6 +110,9 @@ export function PauseMenu({ session }: { session: GameSession }) {
 export function PromotionNote() {
   const belt = useGameStore((s) => s.promotion);
   const progress = useGameStore((s) => s.progress);
+  useEffect(() => {
+    if (belt) audio.promotion();
+  }, [belt]);
   if (!belt) return null;
   const prev = BELT_ORDER[BELT_ORDER.indexOf(belt) - 1] ?? 'white';
   const nb = nextBelt(belt);
