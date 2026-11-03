@@ -60,7 +60,7 @@ The procedural kicks are an intentional, documented choice: the motion is Taekwo
 | Dojang geometry, mats, beams, bags, belt rack | Three.js primitives | Original work |
 | Dobok (jacket, trousers, sleeves), belt, hogu, headgear, gloves, foot protectors (Phase 8) | Procedural skinned geometry in `src/game/render/gear.ts`, fitted to the CC0 mannequin's own bind-pose vertices and skinned to its skeleton | Original work (derived only from the CC0 mannequin's dimensions) |
 | Stylized faces (sculpted mask, eyes, lids, brows, mouth), ponytail; WT-style headgear (Phase 8.1) | Procedural geometry in `src/game/render/face.ts` and `gear.ts`, rigid on the head bone | Original work |
-| Sound effects (whoosh, body/head impact, block, bell, footsteps, UI click, training cues, fanfare, stamina warning, thud, room tone) | Web Audio synthesis in `src/game/audio/AudioEngine.ts` | Original work |
+| All sound effects (Phase 9): kick/punch whooshes, dobok snap, hogu/headgear/punch impacts, blocks, whiffs, footsteps, pivots, landing, dash, exhale, bell, timer tone, scoring blips, gam-jeom buzz, knockout, fall, victory/defeat, training cues, gong, menu cues, room tone | Rendered in code by `src/game/audio/AudioEngine.ts` (seeded noise, biquad filters, envelopes) into in-memory buffers; no audio files ship | Original work. No third-party or recorded audio; no attribution required |
 | Training equipment (paddles, trunk protectors, mats, kick shield), target ring, dobok fabric shading | Three.js primitives and vertex colors | Original work |
 | Hit flashes, blob shadows | Three.js primitives | Original work |
 

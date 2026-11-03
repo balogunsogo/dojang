@@ -229,6 +229,8 @@ export class GameSession {
 
   private shakeScale = 1;
   private lastSteps = [0, 0];
+  private prevState: string[] = ['', ''];
+  private lastWasKick = [false, false];
   private staminaWarned = false;
 
   /** Comfort and camera preferences (applied live from settings). */
@@ -355,7 +357,14 @@ export class GameSession {
       this.publishCoach();
     }
     for (const f of t.feedback) {
-      audio.feedback(f.good);
+      // Restrained training audio: a tock for hits and steps, a soft tick for misses.
+      if (f.code === 'hit') {
+        audio.trainHit(0);
+        const a = t.activity;
+        if (a.kind === 'challenge' && t.hits === Math.ceil(a.goal / 2) && t.hits < a.goal) audio.milestone();
+      } else if (f.code === 'step') audio.trainHit(1);
+      else if (f.code === 'rep') audio.comboDone();
+      else if (!f.good && f.code !== 'timeup') audio.trainMiss();
       this.o.callbacks.onToast({ text: f.text, sub: f.sub, side: null, kind: f.good ? 'score' : 'info' }, f.good ? 900 : 1100);
     }
     t.feedback.length = 0;
@@ -368,11 +377,21 @@ export class GameSession {
   /** Footsteps and the low-stamina warning. */
   private audioCues() {
     for (let i = 0; i < 2; i++) {
-      const n = this.anims[i].steps;
+      // Footsteps sound when a foot actually plants (pivots scuff instead).
+      const n = this.anims[i].plants;
       if (n !== this.lastSteps[i]) {
         this.lastSteps[i] = n;
-        audio.footstep(i === 0 ? 1 : 0.6);
+        audio.footstep(i as 0 | 1, this.anims[i].lastPlantPivot);
       }
+      const f = this.world.fighters[i];
+      const st = f.state;
+      if (st !== this.prevState[i]) {
+        // Weight comes back down after a kick; a dash slides on the mat.
+        if (this.prevState[i] === 'attack' && this.lastWasKick[i] && st !== 'hitstun' && st !== 'down' && st !== 'ko') audio.land(i as 0 | 1);
+        if (st === 'dash') audio.dash(i as 0 | 1);
+        this.prevState[i] = st;
+      }
+      if (st === 'attack' && f.attack) this.lastWasKick[i] = f.attack.move.limb !== 'rearHand';
     }
     const p = this.world.fighters[0];
     if (this.world.phase === 'fight' && p.stamina < 15 && !this.staminaWarned) {
@@ -407,13 +426,20 @@ export class GameSession {
   private onEvent(e: CombatEvent) {
     const toast = this.o.callbacks.onToast;
     switch (e.type) {
-      case 'attack':
-        if (e.move.limb === 'rearFoot') audio.whoosh(e.move.id === 'back' || e.move.id === 'side' ? 1.3 : 1);
-        else audio.whoosh(0.5);
+      case 'attack': {
+        // The whoosh peaks when the technique actually extends (end of startup).
+        const atk = this.world.fighters[e.fighter].attack;
+        const strikeIn = (atk?.startup ?? 8) / 60;
+        const kind = e.move.limb === 'rearHand' ? 'punch' : e.move.id === 'back' || e.move.id === 'side' ? 'turning' : e.move.limb === 'leadFoot' ? 'leadKick' : 'kick';
+        audio.technique({ kind, strikeIn, who: e.fighter });
+        break;
+      }
+      case 'whiff':
+        audio.whiff();
         break;
       case 'hit': {
         const heavy = e.counter || e.zone === 'head' || e.move.pushback > 3;
-        audio.hit(e.zone, heavy);
+        audio.impact(e.move.limb === 'rearHand' ? 'punch' : e.zone, e.counter || !!e.move.turning || (e.zone === 'head' && e.move.limb === 'rearFoot'));
         this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
         this.shake(heavy ? 0.07 : 0.035);
         if (this.training) break; // training gives its own feedback
@@ -431,19 +457,24 @@ export class GameSession {
         break;
       }
       case 'block':
-        audio.block();
+        audio.blocked(e.move.limb === 'rearHand', e.guardBreak);
         this.fx?.spawn(e.point, 'block');
         if (e.guardBreak) toast({ text: 'Guard break!', side: e.attacker, kind: 'hit' });
         break;
       case 'ko':
+        audio.knockout();
         toast({ text: 'K.O.', side: e.fighter === 0 ? 1 : 0, kind: 'call' }, 2000);
         this.shake(0.1);
         break;
-      case 'round-start':
-        audio.bell(1);
+      case 'round-start': {
+        if (this.training) break;
+        const w = this.world;
+        const need = w.rules.roundsToWin - 1;
+        audio.roundStart(!!this.competitive, need > 0 && (w.roundWins[0] >= need || w.roundWins[1] >= need));
         break;
+      }
       case 'round-end': {
-        audio.bell(3);
+        if (!this.training) audio.roundEnd(!!this.competitive);
         const who = e.winner === null ? 'Round drawn' : `${this.defs[e.winner].short} wins the round`;
         const why = e.detail ?? (e.reason === 'time' ? 'Time' : e.reason === 'ko' ? 'K.O.' : '');
         toast({ text: 'Keu-man!', sub: `${who}${why ? ` — ${why}` : ''}`, side: null, kind: 'call' }, 2600);
@@ -467,6 +498,7 @@ export class GameSession {
       case 'match-end':
         if (!this.matchReported && !this.training) {
           this.matchReported = true;
+          audio.matchEnd(e.winner === 0);
           this.o.callbacks.onMatchEnd?.(e.winner === 0);
         }
         break;

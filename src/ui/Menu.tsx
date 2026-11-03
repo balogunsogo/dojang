@@ -51,6 +51,7 @@ function useLeave(): [boolean, (fn: () => void) => void] {
   const [leaving, setLeaving] = useState(false);
   const leave = (fn: () => void) => {
     audio.unlock();
+    audio.start();
     goFullscreenOnTouch();
     if (prefersReducedMotion()) return fn();
     setLeaving(true);
@@ -68,7 +69,7 @@ export function Menu() {
   const [leaving, leave] = useLeave();
   const go = (p: MenuPanel) => useGameStore.getState().setMenuPanel(p);
   const home = () => {
-    audio.click();
+    audio.back();
     go('home');
   };
   useGamepadNav(panel === 'home' ? undefined : home);

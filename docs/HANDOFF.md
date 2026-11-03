@@ -1,5 +1,9 @@
 # Handoff
 
+> **Phase 9 (sound design)** is on `claude/phase-9-audio`, stacked on Phase 8.1 (PR #11, which was still open).
+> - Read [PHASE_9.md](PHASE_9.md): all sounds are rendered in `AudioEngine.ts`, and the event wiring is in `GameSession`.
+> - Checks: `scripts/dev/audio-check.mjs`. Listening page: `?lab=sounds`.
+
 > **Phase 8.1 (faces, headgear, natural rhythm)** is on `claude/phase-8-1-identity-footwork`, stacked on Phase 8 (`claude/amazing-galileo-4k6k1j`, PR #10).
 > - Read [PHASE_8_1.md](PHASE_8_1.md): `face.ts`, the headgear in `gear.ts`, and the bounce in `FighterAnimator.stanceLife`.
 > - Evidence is in `docs/media/phase8_1/`.

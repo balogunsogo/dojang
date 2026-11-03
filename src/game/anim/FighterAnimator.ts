@@ -567,6 +567,13 @@ export class FighterAnimator {
   get steps(): number {
     return this.planner.steps;
   }
+  /** Feet planted so far, and whether the last one was a pivot (footstep sounds land on contact). */
+  get plants(): number {
+    return this.planner.plants;
+  }
+  get lastPlantPivot(): boolean {
+    return this.planner.lastPlantPivot;
+  }
 
   /** Current world position of a named bone (FX, camera, debug). */
   boneWorld(name: keyof typeof BONE, out: THREE.Vector3) {
