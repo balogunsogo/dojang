@@ -3,6 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { FighterStats } from '../combat/Fighter';
+import { buildGear } from './gear';
 
 export const FIGHTER_URL = `${import.meta.env?.BASE_URL ?? '/'}assets/fighter.glb`;
 
@@ -71,9 +72,9 @@ export interface CharacterInstance {
 }
 
 /**
- * Build one fighter: clone the shared CC0 mannequin, then paint a dobok,
- * trunk protector (hogu), headgear and belt into vertex colors so the whole
- * fighter is a single skinned draw call with no textures.
+ * Build one fighter: clone the shared CC0 mannequin, colour its skin, and
+ * dress it with a fitted dobok, belt, hogu, headgear, gloves and foot
+ * protectors (gear.ts): two skinned draw calls on one skeleton, no textures.
  */
 export function createCharacter(gltf: GLTF, def: CharacterDef, corner: 'chung' | 'hong', belt: BeltColor): CharacterInstance {
   const model = cloneSkinned(gltf.scene);
@@ -85,11 +86,26 @@ export function createCharacter(gltf: GLTF, def: CharacterDef, corner: 'chung' |
   const skinned = mesh as THREE.SkinnedMesh;
   skinned.geometry = skinned.geometry.clone();
   model.updateMatrixWorld(true);
-  paintVertexColors(skinned, def, corner, belt);
+  const samples = paintVertexColors(skinned, def, corner, belt);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.0 });
   skinned.material = material;
   skinned.castShadow = true;
   skinned.receiveShadow = false;
+
+  // Dobok, belt, hogu, headgear, gloves and foot protectors: one extra
+  // skinned mesh on the same skeleton (see gear.ts).
+  const lin = (hex: string) => new THREE.Color(hex).convertSRGBToLinear();
+  const gearGeo = buildGear(skinned, samples, { dobok: lin(def.dobok), skin: lin(def.skin), gear: lin(CORNER_COLORS[corner]), belt: lin(BELT_COLORS[belt]) });
+  const gearMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, side: THREE.DoubleSide });
+  const gearMesh = new THREE.SkinnedMesh(gearGeo, gearMat);
+  gearMesh.name = 'gear';
+  gearMesh.castShadow = true;
+  gearMesh.frustumCulled = false;
+  skinned.parent!.add(gearMesh);
+  gearMesh.position.copy(skinned.position);
+  gearMesh.quaternion.copy(skinned.quaternion);
+  gearMesh.scale.copy(skinned.scale);
+  gearMesh.bind(skinned.skeleton, skinned.bindMatrix);
   // The skinned bounds are computed from the bind pose; animation moves limbs
   // far outside them, so skip per-object frustum culling (2 fighters only).
   skinned.frustumCulled = false;
@@ -108,12 +124,14 @@ export function createCharacter(gltf: GLTF, def: CharacterDef, corner: 'chung' |
     dispose() {
       skinned.geometry.dispose();
       material.dispose();
+      gearGeo.dispose();
+      gearMat.dispose();
       group.removeFromParent();
     },
   };
 }
 
-function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: 'chung' | 'hong', belt: BeltColor) {
+function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: 'chung' | 'hong', belt: BeltColor): { p: THREE.Vector3; bone: string }[] {
   const geo = mesh.geometry;
   const pos = geo.getAttribute('position');
   const si = geo.getAttribute('skinIndex');
@@ -135,6 +153,7 @@ function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: '
 
   const boneMats = bones.map((b, i) => b.matrixWorld.clone().multiply(mesh.skeleton.boneInverses[i]));
   const colors = new Float32Array(pos.count * 3);
+  const samples: { p: THREE.Vector3; bone: string }[] = [];
   const p = new THREE.Vector3();
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -152,14 +171,12 @@ function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: '
     // Positions are quantized; the dequantization lives in the inverse bind
     // matrices, so go through the dominant bone to get bind-pose metres.
     p.fromBufferAttribute(pos, i).applyMatrix4(mesh.bindMatrix).applyMatrix4(boneMats[best]);
+    samples.push({ p: p.clone(), bone });
     if (bone === 'DEF-head') {
-      // Headgear with an open face.
+      // Face (the headgear is a separate shell with an opening); hair at the nape.
       const rel = p.clone().sub(head);
-      const face = rel.z > 0.035 && rel.y < 0.15 && rel.y > -0.07 && Math.abs(rel.x) < 0.075;
-      const ear = Math.abs(rel.x) > 0.075 && rel.y < 0.07 && rel.y > -0.02;
-      if (face) c.copy(skin);
-      else if (rel.y < -0.06) c.copy(hair);
-      else c.copy(ear ? gearDark : gear);
+      c.copy(rel.z < -0.04 && rel.y > 0.0 ? hair : skin);
+      void gearDark;
     } else if (bone === 'DEF-neck') {
       c.copy(skin);
     } else if (/hand|f_|thumb/.test(bone)) {
@@ -197,4 +214,5 @@ function paintVertexColors(mesh: THREE.SkinnedMesh, def: CharacterDef, corner: '
     colors[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return samples;
 }
