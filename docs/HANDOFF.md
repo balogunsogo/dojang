@@ -1,5 +1,9 @@
 # Handoff
 
+> **Phase 8 (fighter visuals and animation polish)** is on `claude/amazing-galileo-4k6k1j`, branched from `main` 148d73a.
+> - Read [PHASE_8.md](PHASE_8.md) first: the procedural dobok and gear are in `gear.ts`, footwork is in `FighterAnimator`/`FootPlanner`, and kick chambers are in `poses.ts`.
+> - Screenshots are in `docs/media/phase8/`.
+
 > **Training coach** is on `claude/amazing-galileo-4k6k1j`, branched from `main` 503923b (the accepted UI system, PR #8).
 > - **Code:** the deterministic tips engine is `src/game/training/Coach.ts`; it only observes, using feedback codes added to `TrainingController`. It is wired through `GameSession` (`coachHint`, `coachDismiss`, `setCoachPrefs`). The UI lives in `TrainingHudView` and `CoachTipView`.
 > - **Setting:** `trainingTips` (Settings › Training).
