@@ -97,6 +97,11 @@ export class FighterAnimator {
   private accS = 0;
   /** Smoothed bounce amplitude (wanders between lively and settled). */
   private bounceAmp = 0.018;
+  /** Settle spring: the hips dip when a stepping foot lands or the fighter stops. */
+  private dip = 0;
+  private dipV = 0;
+  private prevStepT = [0, 0];
+  private prevSpeed = 0;
 
   /** Debug: force a pose (pose lab). */
   overridePose: Pose | null = null;
@@ -309,15 +314,30 @@ export class FighterAnimator {
     // Bounce: TKD fighters bounce on the balls of the feet; the rhythm and
     // depth drift so it never reads as a loop.
     const liveliness = 0.5 + 0.5 * noise(t * 0.35, sd + 4);
-    const ampTarget = (g > 0.5 ? 0.007 : 0.012 + 0.012 * liveliness) * (f.stamina < 25 ? 0.6 : 1);
+    // Travelling flattens the bounce: the steps carry the rhythm instead.
+    const travel = clamp(speed / 1.2, 0, 1);
+    const ampTarget = (g > 0.5 ? 0.007 : 0.012 + 0.012 * liveliness) * (f.stamina < 25 ? 0.6 : 1) * (1 - 0.45 * travel);
     this.bounceAmp += (ampTarget - this.bounceAmp) * 0.05;
     const ph = f.stepPhase * (0.92 + 0.08 * noise(t * 0.2, sd));
-    const b = Math.abs(Math.sin(ph));
+    // Smooth bounce (no hard cusp at the bottom): knees flex as the hips
+    // drop, and the body rises onto the balls of the feet.
+    const b = 0.5 - 0.5 * Math.cos(2 * ph);
     out.hips[1] += b * this.bounceAmp - 0.008;
-    // Heels lift slightly at the top of each bounce.
+    // Weight rocks between the feet every other bounce; the shoulders
+    // counter-rotate a little against the hips.
+    const rock = Math.sin(ph) * (1 - 0.5 * g) * (1 - 0.6 * travel);
+    out.hips[2] += rock * 0.014;
+    out.hips[0] += rock * 0.006;
+    out.yaw += rock * 2;
+    out.twist -= rock * 2.6;
+    // Heels lift at the top of each bounce, more on the unweighted foot.
     const heel = b * clamp(this.bounceAmp * 14, 0, 0.25);
-    out.lLeg.point = Math.max(out.lLeg.point, heel);
-    out.rLeg.point = Math.max(out.rLeg.point, heel * 1.2);
+    out.lLeg.point = Math.max(out.lLeg.point, heel * (1 + 0.7 * Math.max(0, -rock)));
+    out.rLeg.point = Math.max(out.rLeg.point, heel * (1.2 + 0.5 * Math.max(0, rock)));
+    // Guard hands ride the bounce a beat late.
+    const lag = (0.5 - 0.5 * Math.cos(2 * ph - 0.9)) * this.bounceAmp * 0.6;
+    out.lArm.p = [out.lArm.p[0], out.lArm.p[1] - lag, out.lArm.p[2]];
+    out.rArm.p = [out.rArm.p[0], out.rArm.p[1] - lag, out.rArm.p[2]];
     // Breathing (faster when tired) and slow weight shift between the feet.
     const tired = f.stamina < 30 ? 1 : 0;
     const breath = Math.sin(t * (1.6 + tired * 1.6) + sd);
@@ -368,6 +388,21 @@ export class FighterAnimator {
     };
     apply(out.lLeg, lo);
     apply(out.rLeg, ro);
+    // Settle: a stepping foot landing, or coming to a stop, loads the knees.
+    if (dt > 0) {
+      const speed = Math.hypot(f.vx, f.vz);
+      if (this.prevStepT[0] > 0 && lo.stepT === 0) this.dipV -= 0.16;
+      if (this.prevStepT[1] > 0 && ro.stepT === 0) this.dipV -= 0.16;
+      if (this.prevSpeed > 0.7 && speed < 0.25) this.dipV -= 0.22;
+      this.prevStepT[0] = lo.stepT;
+      this.prevStepT[1] = ro.stepT;
+      this.prevSpeed = speed;
+      const k = 220;
+      const c = 2 * Math.sqrt(k) * 0.75;
+      this.dipV += (-k * this.dip - c * this.dipV) * dt;
+      this.dip = clamp(this.dip + this.dipV * dt, -0.03, 0.01);
+    }
+    out.hips[1] += this.dip;
     // Weight over the support foot while the other one steps.
     const support = lo.stepT > 0 ? out.rLeg.p : ro.stepT > 0 ? out.lLeg.p : null;
     const mid: [number, number] = [(out.lLeg.p[0] + out.rLeg.p[0]) / 2, (out.lLeg.p[2] + out.rLeg.p[2]) / 2];
