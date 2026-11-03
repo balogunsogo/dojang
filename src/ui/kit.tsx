@@ -47,6 +47,7 @@ export function Menu({ items, label, initial = 0, autoFocus = true, className = 
       if (!items[n].disabled) break;
     }
     setCur(n);
+    audio.nav();
     refs.current[n]?.focus();
   };
   const onKey = (e: KeyboardEvent) => {
@@ -81,7 +82,7 @@ export function Menu({ items, label, initial = 0, autoFocus = true, className = 
                 onPointerEnter={() => !it.disabled && setCur(i)}
                 onFocus={() => setCur(i)}
                 onClick={() => {
-                  audio.click();
+                  audio.confirm();
                   it.onSelect();
                 }}
                 data-testid={it.testid}
@@ -130,7 +131,13 @@ export function QuietButton({ children, hint, onClick, testid, className = '' }:
 
 export function BackButton({ onClick, label = 'Menu' }: { onClick(): void; label?: string }) {
   return (
-    <button className="btn-back" onClick={onClick} aria-label={`Back to ${label.toLowerCase()}`} data-testid="menu-back">
+    <button
+      className="btn-back"
+      onClick={() => {
+        audio.back();
+        onClick();
+      }}
+      aria-label={`Back to ${label.toLowerCase()}`} data-testid="menu-back">
       <span aria-hidden>←</span> {label}
     </button>
   );
