@@ -50,6 +50,10 @@ export class FootPlanner {
   ];
   /** Total steps taken (tests and debugging). */
   steps = 0;
+  /** Feet planted so far (a step or pivot finishing): drives footstep sounds. */
+  plants = 0;
+  /** Whether the latest plant was a pivot on the ball of the foot. */
+  lastPlantPivot = false;
 
   get active() {
     return this.feet !== null;
@@ -86,6 +90,8 @@ export class FootPlanner {
       f.t = Math.min(1, f.t + dt / f.dur);
       if (f.t >= 1) {
         f.stepping = false;
+        this.plants++;
+        this.lastPlantPivot = f.height === 0;
         f.px = goal[i].x;
         f.pz = goal[i].z;
         f.pyaw = goal[i].yaw;
