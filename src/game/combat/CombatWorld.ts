@@ -1,3 +1,4 @@
+import { dhypot, dsin, dcos } from '../dmath';
 import { BODY_RADIUS, DT, TICK_HZ } from '../config';
 import type { FighterIntent, TargetHeight } from '../input/actions';
 import type { V3 } from '../math';
@@ -212,7 +213,7 @@ export class CombatWorld {
     const [a, b] = this.fighters;
     const dx = b.x - a.x;
     const dz = b.z - a.z;
-    const d = Math.hypot(dx, dz);
+    const d = dhypot(dx, dz);
     const min = BODY_RADIUS * 2;
     if (d < min && d > 1e-6) {
       const push = (min - d) / 2;
@@ -251,8 +252,8 @@ export class CombatWorld {
 
   private applyStrike(att: Fighter, def: Fighter, atk: AttackState, zone: HitZone, point: V3) {
     const move = atk.move;
-    const fx = Math.sin(att.yaw);
-    const fz = Math.cos(att.yaw);
+    const fx = dsin(att.yaw);
+    const fz = dcos(att.yaw);
     // Side the technique arrives from, as seen by the defender (presentation only):
     // an orthodox rear-leg roundhouse sweeps in from the attacker's right,
     // which is the defender's left.

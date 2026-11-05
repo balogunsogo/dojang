@@ -1,3 +1,4 @@
+import { dhypot, dsin, dcos } from '../dmath';
 import { HURT } from '../config';
 import { distPointSegmentSq, distSegmentSegmentSq, type V3 } from '../math';
 
@@ -23,10 +24,10 @@ export function testStrike(a: V3, b: V3, r: number, defX: number, defZ: number):
 export function inGuardArc(defYaw: number, defX: number, defZ: number, attX: number, attZ: number, arcDeg = 75): boolean {
   const dx = attX - defX;
   const dz = attZ - defZ;
-  const m = Math.hypot(dx, dz);
+  const m = dhypot(dx, dz);
   if (m < 1e-6) return true;
-  const dot = (Math.sin(defYaw) * dx + Math.cos(defYaw) * dz) / m;
-  return dot >= Math.cos((arcDeg * Math.PI) / 180);
+  const dot = (dsin(defYaw) * dx + dcos(defYaw) * dz) / m;
+  return dot >= dcos((arcDeg * Math.PI) / 180);
 }
 
 /** Legs below the trunk protector (prohibited target in Competitive). */
