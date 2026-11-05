@@ -71,6 +71,11 @@ export class Rollback {
     return this.remoteHead >= this.frame - 1;
   }
 
+  /** A correction is waiting to be re-simulated on the next tick. */
+  get pending() {
+    return this.rollbackFrom !== Infinity;
+  }
+
   /**
    * Advance one tick with this peer's intent. Returns false when waiting
    * (too far ahead of the opponent); the caller should keep the input.
@@ -81,11 +86,9 @@ export class Rollback {
     const drift = (this.localAdv - this.remoteAdv) / 2 >= 1 && this.sinceWait > 15;
     if (ahead || drift) {
       if (drift) this.sinceWait = 0;
-      this.sendInputs();
       return false;
     }
     this.local[this.frame + this.delay] = encodeIntent(intent);
-    this.sendInputs();
     this.settle();
     this.sim(this.frame);
     this.frame++;
@@ -141,6 +144,11 @@ export class Rollback {
     this.world.step(this.intents);
     for (const e of this.world.events) this.events.push({ f, e });
     this.world.events.length = 0;
+  }
+
+  /** Send our recent inputs (call once per rendered frame, after ticking). */
+  flush() {
+    this.sendInputs();
   }
 
   private sendInputs() {

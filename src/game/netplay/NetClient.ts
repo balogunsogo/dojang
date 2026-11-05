@@ -91,10 +91,11 @@ const ICE: RTCIceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stu
 const COUNTDOWN_MS = 3000;
 const GIVE_UP_MS = 2 * 60 * 1000;
 
+/** Stable per browser, so a friend who closes the tab can rejoin with the same link. */
 function clientId() {
   try {
-    let id = sessionStorage.getItem('dojang.netid');
-    if (!id) sessionStorage.setItem('dojang.netid', (id = crypto.randomUUID()));
+    let id = localStorage.getItem('dojang.netid');
+    if (!id) localStorage.setItem('dojang.netid', (id = crypto.randomUUID()));
     return id;
   } catch {
     return crypto.randomUUID();

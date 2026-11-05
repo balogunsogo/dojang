@@ -162,7 +162,9 @@ export class InputManager {
   private onKey(e: KeyboardEvent, down: boolean) {
     const action = this.keys[e.code];
     if (!action) return;
+    // Typing in a field, or Enter/Space on a focused menu button (result and pause screens), is not game input.
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+    if (e.target instanceof HTMLButtonElement && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space')) return;
     e.preventDefault();
     this.lastDevice = 'keyboard';
     this.keyboardUsed = true;

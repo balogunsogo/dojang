@@ -504,8 +504,11 @@ export class AudioEngine {
 
   /* ── Movement ─────────────────────────────────────────────────────── */
 
+  /** The local player's corner (online guests fight in corner 1); their own steps are a little louder. */
+  player: 0 | 1 = 0;
+
   footstep(who: Who, pivot = false) {
-    const gain = who === 0 ? 1 : 0.8;
+    const gain = who === this.player ? 1 : 0.8;
     if (pivot) this.play('scuff', { gain, key: `sc${who}`, at: who });
     else this.play('mat', { gain, key: `st${who}`, at: who });
   }

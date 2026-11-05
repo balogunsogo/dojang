@@ -29,6 +29,7 @@ function run(corrupt: boolean) {
         if (rb[i].frame >= END) continue;
         const me = w[i].fighters[i];
         rb[i].tick(ai[i].think(w[i], me, w[i].fighters[1 - i]));
+        rb[i].flush();
         rb[i].events.length = 0;
         if (corrupt && i === 1 && rb[1].frame >= 600) {
           // A desync on the guest: change the live state and the states a rollback could restore.
