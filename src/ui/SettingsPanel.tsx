@@ -88,6 +88,7 @@ export function SettingsPanel({ compact = false, onControls }: { compact?: boole
           <section className="about">
             <GroupLabel>About</GroupLabel>
             <p className="caption">Inspired by Taekwondo — not an official rules reference or grading. Character: CC0 Quaternius mannequin; techniques are original procedural animation.</p>
+            <p className="caption">Online play: your nickname, fighter and belt are shared with your friend. Matches connect your two devices directly, which lets each of you see the other’s IP address; if a direct link fails, game traffic goes through our server instead. Nothing is stored after the room closes.</p>
           </section>
         )}
       </div>

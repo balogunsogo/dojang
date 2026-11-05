@@ -2,7 +2,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GameSession } from '../game/GameSession';
-import { InputManager } from '../game/input/InputManager';
+import { COUCH_P1, COUCH_P2, InputManager } from '../game/input/InputManager';
+import { net } from '../game/netplay/NetClient';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
 import { useGameStore } from '../store/useGameStore';
 import { Hud } from './Hud';
@@ -11,6 +12,7 @@ import { PerfOverlay } from './PerfOverlay';
 import { RotatePrompt } from './RotatePrompt';
 import { TouchControls } from './TouchControls';
 import { TrainingHudView, TrainingSummary } from './Training';
+import { OnlineStatus } from './OnlineStatus';
 
 declare global {
   interface Window {
@@ -18,7 +20,7 @@ declare global {
   }
 }
 
-function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: GameSession) => void }) {
+function SessionDriver({ input, input2, onReady }: { input: InputManager; input2: InputManager | null; onReady: (s: GameSession) => void }) {
   const { scene, camera, gl } = useThree();
   const sessionRef = useRef<GameSession | null>(null);
   const difficulty = useGameStore((s) => s.difficulty);
@@ -26,6 +28,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
   const mode = useGameStore((s) => s.mode);
   const activity = useGameStore((s) => s.activity);
   const fighter = useGameStore((s) => s.progress.fighter);
+  const versus = useGameStore((s) => s.versus);
 
   useEffect(() => {
     const st = useGameStore.getState();
@@ -43,6 +46,18 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
       playerCharacter: st.progress.fighter,
       playerBelt: st.progress.belt,
       activity: st.activity,
+      ...(versus
+        ? {
+            opponent: versus.kind,
+            characters: versus.characters,
+            belts: versus.belts,
+            names: versus.names,
+            me: versus.me,
+            netHost: versus.host,
+            input2: input2 ?? undefined,
+            net: versus.kind === 'online' ? net.link : undefined,
+          }
+        : {}),
       callbacks: {
         onTrainingHud: (h) => useGameStore.getState().setTrainingHud(h),
         onTrainingEnd: (r) => useGameStore.getState().finishTraining(r),
@@ -60,6 +75,7 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
     sessionRef.current = session;
     st.setLoading(true);
     input.attach(gl.domElement);
+    input2?.attach(gl.domElement);
     let alive = true;
     session
       .init()
@@ -73,13 +89,15 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
     return () => {
       alive = false;
       input.detach();
+      input2?.detach();
+      if (versus?.kind === 'online') net.link.onMessage = null;
       session.dispose();
       sessionRef.current = null;
       if (window.__dojang?.session === session) delete window.__dojang;
     };
     // Session is rebuilt only when the match configuration changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, quality, mode, activity, fighter]);
+  }, [difficulty, quality, mode, activity, fighter, versus]);
 
   const paused = useGameStore((s) => s.paused);
   useEffect(() => {
@@ -91,7 +109,10 @@ function SessionDriver({ input, onReady }: { input: InputManager; onReady: (s: G
 }
 
 export function MatchScreen() {
-  const input = useMemo(() => new InputManager(), []);
+  const versus = useGameStore((s) => s.versus);
+  const couch = versus?.kind === 'local';
+  const input = useMemo(() => new InputManager(couch ? COUCH_P1 : {}), [couch]);
+  const input2 = useMemo(() => (couch ? new InputManager(COUCH_P2) : null), [couch]);
   const [session, setSession] = useState<GameSession | null>(null);
   const settings = useGameStore((s) => s.settings);
   const loading = useGameStore((s) => s.loading);
@@ -146,7 +167,7 @@ export function MatchScreen() {
         }}
       >
         <color attach="background" args={['#1a1510']} />
-        <SessionDriver input={input} onReady={setSession} />
+        <SessionDriver input={input} input2={input2} onReady={setSession} />
       </Canvas>
       {loading && (
         <div className="loading">
@@ -171,6 +192,7 @@ export function MatchScreen() {
       {session && showTouch && <TouchControls input={input} />}
       {session && <PauseMenu session={session} />}
       {session && mode !== 'training' && <ResultOverlay session={session} />}
+      {session && versus?.kind === 'online' && <OnlineStatus session={session} />}
       {session && mode === 'training' && <TrainingSummary session={session} />}
       {settings.showPerf && <PerfOverlay />}
       {touch && <RotatePrompt />}

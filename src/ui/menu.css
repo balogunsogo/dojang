@@ -371,3 +371,21 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
   .coach-actions { align-self: flex-end; margin: 0 -4px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .coach-tip { animation: none; } }
+
+/* ── Play a friend / online ─────────────────────────────────────────── */
+.text-input { width: 100%; min-height: 44px; padding: 0 var(--s3); font: inherit; font-size: 1rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.text-input:focus-visible { outline: 1.5px solid var(--brass); outline-offset: 2px; }
+.text-input.code { width: 9em; text-transform: uppercase; letter-spacing: 0.12em; }
+.screen .row { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; margin-top: var(--s3); }
+.couch-keys { padding-left: 1.1em; }
+.couch-keys li + li { margin-top: var(--s1); }
+.room-code { margin: var(--s4) 0 0; font-family: var(--font-display); font-size: 2.5rem; letter-spacing: 0.16em; color: var(--fg); }
+.ping i, .net-dot i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); vertical-align: middle; }
+.ping-good i { background: #6FBF73; }
+.ping-ok i { background: var(--brass); }
+.ping-bad i { background: var(--warn); }
+.ping { color: var(--fg); white-space: nowrap; }
+.net-dot { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 10px); z-index: 30; display: flex; gap: 6px; align-items: center;
+  font: 600 0.75rem/1 var(--font-ui, sans-serif); color: rgb(239 230 216 / .75); pointer-events: none; }
+.net-banner { position: fixed; left: 50%; top: 28%; transform: translateX(-50%); z-index: 40; padding: var(--s3) var(--s5); background: rgb(21 18 15 / .86); color: #EFE6D8;
+  font: 600 1.125rem/1.4 var(--font-ui, sans-serif); border-radius: 2px; pointer-events: none; white-space: nowrap; }

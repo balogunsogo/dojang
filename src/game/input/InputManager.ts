@@ -40,6 +40,48 @@ export const KEY_BINDINGS: Record<string, string> = {
   KeyP: 'pause',
 };
 
+/** Couch play: player 1 keeps the usual keys (without the arrows). */
+export const P1_KEYS: Record<string, string> = Object.fromEntries(Object.entries(KEY_BINDINGS).filter(([k]) => !k.startsWith('Arrow') && k !== 'ShiftRight'));
+
+/** Couch play: player 2 on the arrows plus the numpad (or the keys around Enter on laptops). */
+export const P2_KEYS: Record<string, string> = {
+  ArrowUp: 'up',
+  ArrowLeft: 'left',
+  ArrowDown: 'down',
+  ArrowRight: 'right',
+  Numpad1: 'punch',
+  Numpad2: 'front',
+  Numpad3: 'round',
+  Numpad4: 'side',
+  Numpad5: 'back',
+  Numpad0: 'guard',
+  NumpadEnter: 'dash',
+  NumpadDecimal: 'switch',
+  Numpad6: 'high',
+  Numpad9: 'lead',
+  Comma: 'punch',
+  Period: 'front',
+  Slash: 'round',
+  Semicolon: 'side',
+  Quote: 'back',
+  ShiftRight: 'dash',
+  ControlRight: 'guard',
+  Enter: 'high',
+  BracketRight: 'switch',
+};
+
+export interface InputOptions {
+  keys?: Record<string, string>;
+  /** Which connected gamepad this player uses, given how many are connected (null: none). */
+  pad?: (connected: number) => number | null;
+  /** Mouse camera and touch controls (one player only). */
+  pointer?: boolean;
+}
+
+/** Couch: with two pads each player gets one; with one pad it goes to player 2. */
+export const COUCH_P1: InputOptions = { keys: P1_KEYS, pad: (n) => (n >= 2 ? 0 : null) };
+export const COUCH_P2: InputOptions = { keys: P2_KEYS, pad: (n) => (n >= 2 ? 1 : n === 1 ? 0 : null), pointer: false };
+
 const ATTACK_KEYS: Record<string, AttackKind> = {
   punch: 'punch',
   front: 'front',
@@ -70,6 +112,15 @@ export class InputManager {
   lastDevice: 'keyboard' | 'touch' | 'gamepad' = 'keyboard';
   /** A real key press has happened (lastDevice defaults to keyboard). */
   keyboardUsed = false;
+  private readonly keys: Record<string, string>;
+  private readonly padFor: (connected: number) => number | null;
+  private readonly pointer: boolean;
+
+  constructor(o: InputOptions = {}) {
+    this.keys = o.keys ?? KEY_BINDINGS;
+    this.padFor = o.pad ?? ((n) => (n ? 0 : null));
+    this.pointer = o.pointer ?? true;
+  }
 
   attach(canvas: HTMLElement) {
     const on = (t: EventTarget, type: string, fn: EventListener, opts?: AddEventListenerOptions) => {
@@ -79,6 +130,7 @@ export class InputManager {
     on(window, 'keydown', ((e: KeyboardEvent) => this.onKey(e, true)) as EventListener);
     on(window, 'keyup', ((e: KeyboardEvent) => this.onKey(e, false)) as EventListener);
     on(window, 'blur', () => this.held.clear());
+    if (!this.pointer) return;
     on(canvas, 'pointerdown', ((e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
       this.mouse.down = true;
@@ -108,7 +160,7 @@ export class InputManager {
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {
-    const action = KEY_BINDINGS[e.code];
+    const action = this.keys[e.code];
     if (!action) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     e.preventDefault();
@@ -185,7 +237,9 @@ export class InputManager {
 
   private pollGamepad(s: ActionState, setMove: (x: number, y: number) => void) {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-    const pad = pads && Array.from(pads).find((p) => p && p.connected);
+    const list = pads ? Array.from(pads).filter((p): p is Gamepad => !!p && p.connected) : [];
+    const slot = this.padFor(list.length);
+    const pad = slot === null ? undefined : list[slot];
     if (!pad) return;
     const dz = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
     const lx = dz(pad.axes[0] ?? 0);
