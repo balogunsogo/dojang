@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GameSession } from '../game/GameSession';
 import { COUCH_P1, COUCH_P2, InputManager } from '../game/input/InputManager';
+import { useInputDevice } from '../game/input/device';
 import { net } from '../game/netplay/NetClient';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
 import { useGameStore } from '../store/useGameStore';
@@ -120,7 +121,9 @@ export function MatchScreen() {
   const mode = useGameStore((s) => s.mode);
   const profile = useMemo(() => resolveQuality(settings.quality), [settings.quality]);
   const touch = useMemo(() => isTouchDevice(), []);
-  const showTouch = touch || settings.forceTouch || new URLSearchParams(location.search).get('touch') === '1';
+  const device = useInputDevice().device;
+  // A controller on a phone or tablet hides the on-screen controls; touching the screen brings them back.
+  const showTouch = (touch || settings.forceTouch || new URLSearchParams(location.search).get('touch') === '1') && device !== 'gamepad';
 
   useEffect(() => {
     session?.setPrefs({ cameraAssist: settings.cameraAssist, reduceShake: settings.reduceShake, reduceFlash: settings.reduceFlash });

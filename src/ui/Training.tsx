@@ -1,4 +1,5 @@
 import type { GameSession } from '../game/GameSession';
+import { padLabel } from '../game/input/device';
 import { BELT_REQUIREMENTS, nextBelt, type Progress } from '../game/progress/progress';
 import { useEffect, useState } from 'react';
 import { ACTIVITIES, activityById } from '../game/training/activities';
@@ -47,7 +48,7 @@ export function TrainingHudView() {
           {h.combo > 1 && <span className="combo">×{h.combo}</span>}
         </div>
         {session && !h.done && !h.failed && (
-          <button className="tbtn hint" onPointerDown={() => session.coachHint()} aria-label="Hint" title={scheme === 'keyboard' ? 'Hint (H)' : 'Hint'} data-testid="coach-hint">
+          <button className="tbtn hint" onPointerDown={() => session.coachHint()} aria-label="Hint" title={scheme === 'keyboard' ? 'Hint (H)' : scheme === 'gamepad' ? `Hint (${padLabel('L3')})` : 'Hint'} data-testid="coach-hint">
             Hint
           </button>
         )}

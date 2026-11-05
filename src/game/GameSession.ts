@@ -315,6 +315,7 @@ export class GameSession {
       this.o.callbacks.onPauseToggle();
     }
     if (actions.toggleLock) this.camRig.lockOn = !this.camRig.lockOn;
+    if (actions.hint) this.coachHint();
     this.camRig.input(actions.camYaw, actions.camPitch, actions.camZoom);
 
     const w = this.world;

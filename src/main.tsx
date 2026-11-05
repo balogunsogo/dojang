@@ -28,6 +28,7 @@ if (params.get('lab') === 'poses') {
 } else if (params.get('lab') === 'motion') {
   import('./lab/motionLab').then((m) => m.runMotionLab(root));
 } else {
+  void Promise.all([import('./game/input/device'), import('./game/render/quality')]).then(([d, q]) => d.trackInputDevice(q.isTouchDevice()));
   import('./App').then(({ App }) => {
     createRoot(root).render(
       <StrictMode>
