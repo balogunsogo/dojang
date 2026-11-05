@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { PAD_LABELS, PAD_NAME, type PadStyle, useInputDevice } from '../game/input/device';
 import type { QualitySetting } from '../game/render/quality';
 import { DEFAULT_SETTINGS, type Settings, useGameStore } from '../store/useGameStore';
 import { GroupLabel, QuietButton, SettingChoice, SettingLink, SettingSlider, SettingToggle } from './kit';
@@ -96,6 +98,35 @@ export function SettingsPanel({ compact = false, onControls }: { compact?: boole
   );
 }
 
+/** Gamepad bindings, labelled for the controller in use (switchable). */
+function GamepadReference() {
+  const dev = useInputDevice();
+  const [style, setStyle] = useState<PadStyle>(dev.pad);
+  const L = PAD_LABELS[style];
+  return (
+    <section data-testid="gamepad-ref">
+      <GroupLabel>Gamepad</GroupLabel>
+      <SettingChoice<PadStyle>
+        label="Controller"
+        value={style}
+        onChange={(v) => setStyle(v)}
+        options={(Object.keys(PAD_NAME) as PadStyle[]).map((k) => [k, PAD_NAME[k]])}
+      />
+      <ul>
+        <li>
+          Left stick move · right stick camera · <kbd>{L.X}</kbd> punch · <kbd>{L.A}</kbd> front · <kbd>{L.B}</kbd> round · <kbd>{L.Y}</kbd> side · <kbd>{L.RB}</kbd> back · D-pad ↑ → ← lead-leg kicks
+        </li>
+        <li>
+          Hold <kbd>{L.LB}</kbd> guard · hold <kbd>{L.RT}</kbd> head target · <kbd>{L.LT}</kbd> dash · D-pad ↓ switch stance · <kbd>{L.R3}</kbd> lock-on · <kbd>{L.Start}</kbd> pause · <kbd>{L.L3}</kbd> training hint
+        </li>
+        <li>
+          Menus: D-pad to move, <kbd>{L.A}</kbd> to select, <kbd>{L.B}</kbd> to go back. On a phone or tablet the touch controls hide while you use a controller.
+        </li>
+      </ul>
+    </section>
+  );
+}
+
 /** Keyboard, touch and gamepad reference (real bindings). */
 export function ControlsReference() {
   return (
@@ -131,13 +162,7 @@ export function ControlsReference() {
           <li>One button per technique, plus Guard, Dash, Body/Head, a Rear/Lead chip and ⇄. Opacity, size and left-handed layout are in Settings.</li>
         </ul>
       </section>
-      <section>
-        <GroupLabel>Gamepad</GroupLabel>
-        <ul>
-          <li>Left stick move · right stick camera · X punch · A front · B round · Y side · RB back · D-pad ↑ → ← lead-leg kicks</li>
-          <li>LB guard · RT head target · LT dash · R3 switch stance · Start pause. In menus: D-pad to move, A to select, B to go back.</li>
-        </ul>
-      </section>
+      <GamepadReference />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { type ActionState, type AttackKind, emptyActions, LEAD_OF, type TargetHeight } from './actions';
+import { noteGamepad } from './device';
 
 /**
  * Shared, mutable input written by the on-screen touch controls (React
@@ -94,7 +95,7 @@ const ATTACK_KEYS: Record<string, AttackKind> = {
 };
 
 // Standard gamepad mapping.
-const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, R3: 11, UP: 12, LEFT: 14, RIGHT: 15 };
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
 
 /**
  * Merges keyboard, mouse, touch and gamepad into one ActionState. Edge events
@@ -190,6 +191,7 @@ export class InputManager {
     else if (action === 'switch') this.edges.switchStance = true;
     else if (action === 'lock') this.edges.toggleLock = true;
     else if (action === 'pause') this.edges.pause = true;
+    else if (action === 'hint') this.edges.hint = true;
   }
 
   /** Read the merged state for this frame. Edges stay latched until consumeEdges(). */
@@ -250,7 +252,10 @@ export class InputManager {
     const ry = dz(pad.axes[3] ?? 0);
     const btn = (i: number) => !!pad.buttons[i]?.pressed;
     const edge = (i: number) => btn(i) && !this.padPrev[i];
-    if (lx || ly || rx || ry || pad.buttons.some((b) => b.pressed)) this.lastDevice = 'gamepad';
+    if (lx || ly || rx || ry || pad.buttons.some((b) => b.pressed)) {
+      this.lastDevice = 'gamepad';
+      noteGamepad(pad);
+    }
     setMove(lx, -ly);
     s.camYaw -= rx * 0.05;
     s.camPitch += ry * 0.03;
@@ -265,7 +270,9 @@ export class InputManager {
     if (edge(PAD.RIGHT)) this.press('leadRound');
     if (edge(PAD.LEFT)) this.press('leadSide');
     if (edge(PAD.LT)) this.press('dash');
-    if (edge(PAD.R3) || edge(PAD.SELECT)) this.press('switch');
+    if (edge(PAD.DOWN) || edge(PAD.SELECT)) this.press('switch');
+    if (edge(PAD.R3)) this.press('lock');
+    if (edge(PAD.L3)) this.press('hint');
     if (edge(PAD.START)) this.press('pause');
     this.padPrev = pad.buttons.map((b) => b.pressed);
     Object.assign(s, this.edges);

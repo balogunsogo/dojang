@@ -6,6 +6,7 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { audio } from '../game/audio/AudioEngine';
 import { BELT_COLORS } from '../game/render/characterFactory';
+import { hintKey, noteGamepad, useInputDevice } from '../game/input/device';
 import { isTouchDevice } from '../game/render/quality';
 
 /* ── Wordmark & title ─────────────────────────────────────────────── */
@@ -103,15 +104,23 @@ export function Menu({ items, label, initial = 0, autoFocus = true, className = 
 }
 
 /* ── Actions ──────────────────────────────────────────────────────── */
+/** Key hint on a button, shown as the matching controller button when a gamepad is in use. */
+function HintKey({ k }: { k?: string }) {
+  const dev = useInputDevice();
+  const label = k ? hintKey(k, dev) : null;
+  if (!label) return null;
+  return (
+    <kbd className={`hint-key ${dev.device === 'gamepad' ? `pad pad-${dev.pad}` : ''}`} aria-hidden>
+      {label}
+    </kbd>
+  );
+}
+
 export function PrimaryButton({ children, hint, onClick, testid, autoFocus, disabled }: { children: ReactNode; hint?: string; onClick(): void; testid?: string; autoFocus?: boolean; disabled?: boolean }) {
   return (
     <button className="btn-primary" onClick={onClick} data-testid={testid} autoFocus={autoFocus} disabled={disabled}>
       <span>{children}</span>
-      {hint && (
-        <kbd className="hint-key" aria-hidden>
-          {hint}
-        </kbd>
-      )}
+      <HintKey k={hint} />
     </button>
   );
 }
@@ -120,11 +129,7 @@ export function QuietButton({ children, hint, onClick, testid, className = '' }:
   return (
     <button className={`btn-quiet ${className}`} onClick={onClick} data-testid={testid}>
       <span>{children}</span>
-      {hint && (
-        <kbd className="hint-key" aria-hidden>
-          {hint}
-        </kbd>
-      )}
+      <HintKey k={hint} />
     </button>
   );
 }
@@ -270,14 +275,15 @@ export function SettingLink({ label, onClick, testid }: { label: string; onClick
   );
 }
 
-/* ── Info: input hints (hidden on touch) and group labels ─────────── */
+/* ── Info: input hints (hidden on touch, controller buttons on a gamepad) ── */
 export function Hints({ items }: { items: [string, string][] }) {
-  if (isTouchDevice()) return null;
+  const dev = useInputDevice();
+  if (dev.device !== 'gamepad' && (dev.device === 'touch' || isTouchDevice())) return null;
   return (
-    <p className="hints" aria-hidden>
+    <p className="hints" aria-hidden data-testid="hints">
       {items.map(([k, v]) => (
         <span key={k + v}>
-          <kbd>{k}</kbd> {v}
+          <kbd className={dev.device === 'gamepad' ? `pad pad-${dev.pad}` : undefined}>{hintKey(k, dev) ?? k}</kbd> {v}
         </span>
       ))}
     </p>
@@ -361,6 +367,7 @@ export function useGamepadNav(onBack?: () => void) {
       if (!pad) return;
       const ax = pad.axes[0] ?? 0;
       const ay = pad.axes[1] ?? 0;
+      if (pad.buttons.some((b) => b.pressed) || Math.abs(pad.axes[0] ?? 0) > 0.6 || Math.abs(pad.axes[1] ?? 0) > 0.6) noteGamepad(pad);
       const now: Record<string, boolean> = {
         up: !!pad.buttons[12]?.pressed || ay < -0.6,
         down: !!pad.buttons[13]?.pressed || ay > 0.6,

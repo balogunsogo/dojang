@@ -28,6 +28,8 @@ export interface ActionState {
   switchStance: boolean;
   toggleLock: boolean;
   pause: boolean;
+  /** Training: ask the coach for a hint. */
+  hint: boolean;
   /** Camera orbit deltas (radians) accumulated since last frame. */
   camYaw: number;
   camPitch: number;
@@ -47,6 +49,7 @@ export function emptyActions(): ActionState {
     switchStance: false,
     toggleLock: false,
     pause: false,
+    hint: false,
     camYaw: 0,
     camPitch: 0,
     camZoom: 0,

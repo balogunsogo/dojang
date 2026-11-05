@@ -1,6 +1,7 @@
 import type { CombatWorld } from '../combat/CombatWorld';
 import { TICK_HZ } from '../config';
 import type { AttackKind } from '../input/actions';
+import { type PadButton, padLabel } from '../input/device';
 import type { Activity } from './activities';
 import type { TrainingController, TrainingFeedback } from './TrainingController';
 
@@ -31,7 +32,8 @@ const NAME: Record<AttackKind, string> = {
 };
 const WHEEL: Partial<Record<AttackKind, string>> = { front: 'Front', round: 'Round', side: 'Side', back: 'Back', leadFront: 'Front', leadRound: 'Round', leadSide: 'Side' };
 const KEY: Record<AttackKind, string> = { punch: 'J', front: 'K', round: 'L', side: 'U', back: 'I', leadFront: 'F + K', leadRound: 'F + L', leadSide: 'F + U' };
-const PAD: Record<AttackKind, string> = { punch: 'X', front: 'A', round: 'B', side: 'Y', back: 'RB', leadFront: 'D-pad ↑', leadRound: 'D-pad →', leadSide: 'D-pad ←' };
+const PAD: Record<AttackKind, PadButton | string> = { punch: 'X', front: 'A', round: 'B', side: 'Y', back: 'RB', leadFront: 'D-pad ↑', leadRound: 'D-pad →', leadSide: 'D-pad ←' };
+const pad = (b: PadButton | string) => (b.startsWith('D-pad') ? b : padLabel(b as PadButton));
 
 /**
  * How to perform an action with the given scheme, as a short phrase.
@@ -49,12 +51,12 @@ export function how(a: CoachAction, scheme: InputScheme): string {
       if (a === 'switch') return 'Q';
       return lead ? `hold F, press ${KEY[a].slice(-1)}` : `press ${KEY[a]}`;
     case 'gamepad':
-      if (a === 'head') return 'hold RT while you kick';
-      if (a === 'body') return 'kick without holding RT';
-      if (a === 'guard' || a === 'block') return 'hold LB';
+      if (a === 'head') return `hold ${pad('RT')} while you kick`;
+      if (a === 'body') return `kick without holding ${pad('RT')}`;
+      if (a === 'guard' || a === 'block') return `hold ${pad('LB')}`;
       if (a === 'move') return 'the left stick';
-      if (a === 'switch') return 'R3';
-      return `press ${PAD[a]}`;
+      if (a === 'switch') return 'D-pad ↓';
+      return `press ${pad(PAD[a])}`;
     case 'compact':
       if (a === 'head') return 'slide past the dashed ring, or set the chip to Head';
       if (a === 'body') return 'set the chip to Body';
