@@ -11,6 +11,8 @@ const SHOT: Record<MenuPanel, MenuShot> = {
   progress: 'progress',
   settings: 'settings',
   controls: 'settings',
+  friend: 'spar',
+  online: 'spar',
 };
 
 function canUseWebGL() {

@@ -8,6 +8,7 @@ import { DT, MAX_STEPS_PER_FRAME } from './config';
 import { type ActionState, emptyIntent, type FighterIntent } from './input/actions';
 import type { InputManager } from './input/InputManager';
 import { approachAngle, wrapAngle } from './math';
+import { type NetMsg, Rollback } from './netplay/Rollback';
 import { PerfMonitor } from './perf/PerfMonitor';
 import { type BeltColor, CHARACTERS, type CharacterDef, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
 import { buildDojang, type DojangHandle } from './render/Dojang';
@@ -55,7 +56,27 @@ export interface SessionOptions {
   playerBelt?: Belt;
   /** Training activity id (training mode). */
   activity?: string;
+  /** Who controls the other fighter (default: the AI). */
+  opponent?: 'ai' | 'local' | 'online';
+  /** Fighters for both corners (versus modes). Overrides playerCharacter. */
+  characters?: [CharacterId, CharacterId];
+  belts?: [Belt, Belt];
+  /** Couch: second player's controls. */
+  input2?: InputManager;
+  /** Online: which corner this player controls, and the link to the other peer. */
+  me?: 0 | 1;
+  net?: NetLink;
+  /** Online: this player hosts the room (its state wins on a desync). */
+  netHost?: boolean;
+  /** Player names shown on the HUD (couch / online). */
+  names?: [string, string];
   callbacks: SessionCallbacks;
+}
+
+/** Message link to the other player (online). */
+export interface NetLink {
+  send(m: NetMsg): void;
+  onMessage: ((m: NetMsg) => void) | null;
 }
 
 /** Opponent belt by AI difficulty (presentation; matches the menu labels). */
@@ -108,11 +129,18 @@ export class GameSession {
   private lastScheme: InputScheme | null = null;
   private trainingReported = false;
   private matchReported = false;
+  /** Corner this player controls (0 unless playing online as the guest). */
+  readonly me: 0 | 1;
+  /** Online rollback (null offline). */
+  readonly net: Rollback | null = null;
+  private seenEvents = new Map<string, number>();
 
   constructor(o: SessionOptions) {
     this.o = o;
-    const me = o.playerCharacter ?? 'jae';
-    this.defs = [CHARACTERS[me], CHARACTERS[me === 'jae' ? 'hana' : 'jae']];
+    this.me = o.me ?? 0;
+    const pc = o.playerCharacter ?? 'jae';
+    const ids = o.characters ?? [pc, pc === 'jae' ? 'hana' : 'jae'];
+    this.defs = [CHARACTERS[ids[0]], CHARACTERS[ids[1]]];
     const rules: Ruleset =
       o.mode === 'competitive'
         ? new CompetitiveRules(o.roundSeconds ? { roundSeconds: o.roundSeconds } : {})
@@ -127,6 +155,11 @@ export class GameSession {
       this.resetTraining();
     }
     this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
+    if (o.opponent === 'online' && o.net) {
+      const net = new Rollback(this.world, this.me, (m) => o.net!.send(m), { host: !!o.netHost });
+      this.net = net;
+      o.net.onMessage = (m) => net.receive(m);
+    }
     this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
   }
 
@@ -136,7 +169,7 @@ export class GameSession {
     this.o.scene.add(this.env.group);
     const corners = ['chung', 'hong'] as const;
     for (let i = 0; i < 2; i++) {
-      const belt: BeltColor = i === 0 ? (this.o.playerBelt ?? 'white') : this.training ? 'black' : AI_BELT[this.o.difficulty];
+      const belt: BeltColor = this.o.belts?.[i] ?? (i === 0 ? (this.o.playerBelt ?? 'white') : this.training ? 'black' : AI_BELT[this.o.difficulty]);
       const c = createCharacter(gltf, this.defs[i], corners[i], belt);
       this.o.scene.add(c.group);
       this.chars.push(c);
@@ -252,10 +285,10 @@ export class GameSession {
   }
 
   private readonly pIntent: FighterIntent = emptyIntent();
+  private readonly p2Intent: FighterIntent = emptyIntent();
 
   /** Map device actions (camera-relative) to a world-space fighter intent (reused object: no per-tick allocation). */
-  private playerIntent(a: ActionState): FighterIntent {
-    const intent = this.pIntent;
+  private playerIntent(a: ActionState, intent = this.pIntent): FighterIntent {
     const yaw = this.camRig.viewYaw;
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
@@ -283,8 +316,12 @@ export class GameSession {
     this.camRig.input(actions.camYaw, actions.camPitch, actions.camZoom);
 
     const w = this.world;
-    const [p, o] = w.fighters;
-    if (!this.paused) {
+    const p = w.fighters[this.me];
+    const o = w.fighters[1 - this.me];
+    const a2 = this.o.input2?.poll();
+    if (a2?.pause) this.o.callbacks.onPauseToggle();
+    if (this.net) this.netFrame(dt, actions);
+    else if (!this.paused) {
       this.acc += dt;
       let steps = 0;
       let first = true;
@@ -296,10 +333,16 @@ export class GameSession {
           pi.dash = false;
           pi.switchStance = false;
         }
-        const ai = this.training ? this.training.partnerIntent(w) : this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
+        let ai: FighterIntent;
+        if (a2) {
+          ai = this.playerIntent(a2, this.p2Intent);
+          if (!first) ai.attack = null;
+          if (!first) ai.dash = ai.switchStance = false;
+        } else ai = this.training ? this.training.partnerIntent(w) : this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
         w.step([pi, ai]);
         this.trainingTick();
         if (first) this.o.input.consumeEdges();
+        if (first) this.o.input2?.consumeEdges();
         first = false;
         this.acc -= DT;
         steps++;
@@ -308,19 +351,21 @@ export class GameSession {
       if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
     } else {
       this.o.input.consumeEdges();
+      this.o.input2?.consumeEdges();
     }
     const t1 = performance.now();
 
     // Render interpolation.
-    const alpha = w.hitstop > 0 || this.paused ? 1 : this.acc / DT;
-    const animAlpha = w.hitstop > 0 || this.paused ? 0 : this.acc / DT;
+    const frozen = this.paused && !this.net;
+    const alpha = w.hitstop > 0 || frozen ? 1 : this.acc / DT;
+    const animAlpha = w.hitstop > 0 || frozen ? 0 : this.acc / DT;
     w.fighters.forEach((f, i) => {
       const pr = this.prev[i];
       const x = pr.x + (f.x - pr.x) * alpha;
       const z = pr.z + (f.z - pr.z) * alpha;
       const yaw = pr.yaw + wrapAngle(f.yaw - pr.yaw) * alpha;
       this.visYaw[i] = approachAngle(this.visYaw[i], yaw, 14 * dt);
-      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], w.hitstop > 0 || this.paused ? 0 : dt);
+      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], w.hitstop > 0 || frozen ? 0 : dt);
     });
     const t2 = performance.now();
     this.audioCues();
@@ -357,6 +402,50 @@ export class GameSession {
       const newDpr = this.dynRes.update(0.5, this.perf.avgMs, window.devicePixelRatio || 1);
       if (newDpr !== null) this.o.gl.setPixelRatio(newDpr);
     }
+  }
+
+  /**
+   * Online: step through the rollback controller. No pause; a press is kept
+   * until a tick actually uses it. Events from re-simulated ticks play once.
+   */
+  private netFrame(dt: number, actions: ActionState) {
+    const net = this.net!;
+    this.acc += dt;
+    let steps = 0;
+    while (this.acc >= DT && steps < MAX_STEPS_PER_FRAME) {
+      this.syncPrevPositions();
+      const pi = this.playerIntent(actions);
+      if (net.tick(pi)) {
+        this.o.input.consumeEdges();
+        actions.attack = null;
+        actions.dash = actions.switchStance = false;
+      }
+      this.acc -= DT;
+      steps++;
+    }
+    if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
+    for (const { f, e } of net.events) {
+      const who = 'fighter' in e ? e.fighter : 'attacker' in e ? e.attacker : '';
+      const key = `${f}|${e.type}|${who}`;
+      if (this.seenEvents.has(key) || e.type === 'match-end') continue;
+      this.seenEvents.set(key, f);
+      this.onEvent(e);
+    }
+    net.events.length = 0;
+    if (this.seenEvents.size > 400) for (const [k, f] of this.seenEvents) if (f < net.frame - 240) this.seenEvents.delete(k);
+    this.handleEvents();
+    // The result counts only once every input behind it is confirmed.
+    const w = this.world;
+    if (w.phase === 'match-over' && net.confirmed && !this.matchReported) {
+      this.matchReported = true;
+      audio.matchEnd(w.matchWinner === this.me);
+      this.o.callbacks.onMatchEnd?.(w.matchWinner === this.me);
+    }
+  }
+
+  /** Online: ms since the other player was last heard from. */
+  get netSilentMs() {
+    return this.net ? performance.now() - this.net.lastHeard : 0;
   }
 
   /** Feed this tick's events to the training controller and surface its feedback. */
@@ -406,11 +495,11 @@ export class GameSession {
       }
       if (st === 'attack' && f.attack) this.lastWasKick[i] = f.attack.move.limb !== 'rearHand';
     }
-    const p = this.world.fighters[0];
-    if (this.world.phase === 'fight' && p.stamina < 15 && !this.staminaWarned) {
+    const p = this.world.fighters[this.me];
+    if (this.world.phase === 'fight' && p.stamina < 15 && !this.staminaWarned && !this.o.input2) {
       this.staminaWarned = true;
       audio.staminaWarning();
-      this.o.callbacks.onToast({ text: 'Low stamina', sub: 'Step back and breathe', side: 0, kind: 'info' }, 1200);
+      this.o.callbacks.onToast({ text: 'Low stamina', sub: 'Step back and breathe', side: this.me, kind: 'info' }, 1200);
     } else if (p.stamina > 35) this.staminaWarned = false;
   }
 
@@ -511,8 +600,8 @@ export class GameSession {
       case 'match-end':
         if (!this.matchReported && !this.training) {
           this.matchReported = true;
-          audio.matchEnd(e.winner === 0);
-          this.o.callbacks.onMatchEnd?.(e.winner === 0);
+          audio.matchEnd(e.winner === this.me);
+          this.o.callbacks.onMatchEnd?.(e.winner === this.me);
         }
         break;
     }
@@ -522,8 +611,9 @@ export class GameSession {
     if (this.training) this.o.callbacks.onTrainingHud?.(this.training.hud());
     const w = this.world;
     const [p, o] = w.fighters;
+    const mine = w.fighters[this.me];
     this.o.callbacks.onHud({
-      names: [this.defs[0].name, this.defs[1].name],
+      names: this.o.names ?? [this.defs[0].name, this.defs[1].name],
       shortNames: [this.defs[0].short, this.defs[1].short],
       health: [p.health, o.health],
       maxHealth: [p.stats.maxHealth, o.stats.maxHealth],
@@ -537,7 +627,7 @@ export class GameSession {
       lastRoundWinner: w.lastRoundWinner,
       high: a.high,
       lockOn: this.camRig.lockOn,
-      stance: p.stance,
+      stance: mine.stance,
       mode: this.competitive ? 'competitive' : 'arcade',
       points: [w.points[0], w.points[1]],
       gamjeom: this.competitive ? [this.competitive.stats[0].gamjeom, this.competitive.stats[1].gamjeom] : [0, 0],

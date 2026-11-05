@@ -10,6 +10,7 @@ import {
   checkPromotion,
   loadProgress,
   type Progress,
+  recordFriendMatch,
   recordMatch,
   recordTraining,
   saveProgress,
@@ -19,7 +20,21 @@ import {
 import type { TrainingHud } from '../game/training/TrainingController';
 
 export type GameMode = 'arcade' | 'competitive' | 'training';
-export type MenuPanel = 'home' | 'spar' | 'training' | 'fighter' | 'progress' | 'settings' | 'controls';
+export type MenuPanel = 'home' | 'spar' | 'training' | 'fighter' | 'progress' | 'settings' | 'controls' | 'friend' | 'online';
+
+/** A match against a friend: on this device (couch) or online. */
+export interface Versus {
+  kind: 'local' | 'online';
+  characters: [CharacterId, CharacterId];
+  belts: [Belt, Belt];
+  names: [string, string];
+  /** Corner this device's player controls (online). */
+  me: 0 | 1;
+  /** Online: this player hosts the room (its state wins on a desync). */
+  host?: boolean;
+  /** Online: changes on every new match (rebuilds the session). */
+  matchId?: number;
+}
 
 export interface HudState {
   names: [string, string];
@@ -152,6 +167,9 @@ interface GameStore {
   /** Training coach tip on screen and the active input scheme. */
   coach: { tip: CoachTip | null; scheme: InputScheme } | null;
   setCoach(tip: CoachTip | null, scheme: InputScheme): void;
+  /** Friend match setup (null against the AI). */
+  versus: Versus | null;
+  startVersus(v: Versus, mode: 'arcade' | 'competitive'): void;
   /** Current main-menu panel (kept when returning from a match). */
   menuPanel: MenuPanel;
   setMenuPanel(p: MenuPanel): void;
@@ -163,7 +181,7 @@ interface GameStore {
   recordMatchResult(won: boolean): void;
   clearPromotion(): void;
   resetProgress(): void;
-  toMenu(): void;
+  toMenu(panel?: MenuPanel): void;
   setPaused(p: boolean): void;
   setHud(h: HudState): void;
   pushToast(t: Omit<Toast, 'id'>, ms?: number): void;
@@ -200,18 +218,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
   promotion: null,
   coach: null,
   setCoach: (tip, scheme) => set({ coach: { tip, scheme } }),
+  versus: null,
+  startVersus: (versus, mode) => set({ screen: 'match', versus, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
   menuPanel: 'home',
   setMenuPanel: (menuPanel) => set({ menuPanel }),
-  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
-  startTraining: (activity) => set({ screen: 'match', mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
-  toMenu: () => set({ screen: 'menu', menuPanel: 'home', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', versus: null, difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startTraining: (activity) => set({ screen: 'match', versus: null, mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  toMenu: (panel?: MenuPanel) => set({ screen: 'menu', menuPanel: typeof panel === 'string' ? panel : 'home', versus: null, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
   setFighter: (fighter) => commitProgress({ ...get().progress, fighter }),
   setTrainingHud: (trainingHud) => set({ trainingHud }),
   finishTraining: (r) => {
     set({ trainingResult: r });
     commitProgress(recordTraining(get().progress, r));
   },
-  recordMatchResult: (won) => commitProgress(recordMatch(get().progress, get().difficulty, won)),
+  // Friend matches: only this device's player 1 (or the online player) is recorded.
+  recordMatchResult: (won) => commitProgress(get().versus ? recordFriendMatch(get().progress, won) : recordMatch(get().progress, get().difficulty, won)),
   clearPromotion: () => set({ promotion: null }),
   resetProgress: () => commitProgress({ ...defaultProgress(), fighter: get().progress.fighter }),
   setPaused: (paused) => set({ paused }),

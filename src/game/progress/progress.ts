@@ -37,6 +37,8 @@ export interface Progress {
     won: number;
     /** Wins by AI difficulty (any mode). */
     wins: Record<Difficulty, number>;
+    /** Wins against a friend (couch or online). Count toward Yellow only. */
+    friendWins: number;
   };
 }
 
@@ -50,7 +52,7 @@ export function defaultProgress(): Progress {
     completed: [],
     records: {},
     landed: {},
-    matches: { played: 0, won: 0, wins: { easy: 0, normal: 0, hard: 0 } },
+    matches: { played: 0, won: 0, wins: { easy: 0, normal: 0, hard: 0 }, friendWins: 0 },
   };
 }
 
@@ -84,6 +86,7 @@ export function migrate(raw: unknown): Progress {
     p.matches.won = num(m.won);
     const w = (m.wins ?? {}) as Record<string, unknown>;
     p.matches.wins = { easy: num(w.easy), normal: num(w.normal), hard: num(w.hard) };
+    p.matches.friendWins = num(m.friendWins);
   }
   return p;
 }
@@ -160,8 +163,8 @@ export const BELT_REQUIREMENTS: Record<Exclude<Belt, 'white'>, Requirement[]> = 
     {
       id: 'win-white',
       label: 'Win a sparring match (White belt opponent or harder)',
-      done: (p) => p.matches.wins.easy + p.matches.wins.normal + p.matches.wins.hard > 0,
-      status: (p) => `${p.matches.wins.easy + p.matches.wins.normal + p.matches.wins.hard} wins`,
+      done: (p) => p.matches.wins.easy + p.matches.wins.normal + p.matches.wins.hard + p.matches.friendWins > 0,
+      status: (p) => `${p.matches.wins.easy + p.matches.wins.normal + p.matches.wins.hard + p.matches.friendWins} wins`,
     },
   ],
   green: [
@@ -242,6 +245,11 @@ export function recordTraining(p: Progress, r: TrainingResult): Progress {
   };
 }
 
+/** A finished match against a friend (forfeits and disconnects are not recorded). */
+export function recordFriendMatch(p: Progress, won: boolean): Progress {
+  return { ...p, matches: { ...p.matches, played: p.matches.played + 1, won: p.matches.won + (won ? 1 : 0), friendWins: p.matches.friendWins + (won ? 1 : 0) } };
+}
+
 export function recordMatch(p: Progress, difficulty: Difficulty, won: boolean): Progress {
   return {
     ...p,
@@ -249,6 +257,7 @@ export function recordMatch(p: Progress, difficulty: Difficulty, won: boolean): 
       played: p.matches.played + 1,
       won: p.matches.won + (won ? 1 : 0),
       wins: { ...p.matches.wins, [difficulty]: p.matches.wins[difficulty] + (won ? 1 : 0) },
+      friendWins: p.matches.friendWins,
     },
   };
 }

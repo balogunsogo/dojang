@@ -1,3 +1,4 @@
+import { dhypot, dsin, dcos } from '../dmath';
 import { ARENA_HALF, DT, STAMINA_MAX } from '../config';
 import type { AttackKind, FighterIntent, TargetHeight } from '../input/actions';
 import { approachAngle, clamp, smoothstep, type V3, wrapAngle, yawOf } from '../math';
@@ -204,8 +205,8 @@ export class Fighter {
         // Root motion: travel forward through startup + active.
         if (t < a.startup + a.move.active) {
           const adv = a.move.advance / (a.startup + a.move.active) / DT;
-          desiredVX = Math.sin(this.yaw) * adv;
-          desiredVZ = Math.cos(this.yaw) * adv;
+          desiredVX = dsin(this.yaw) * adv;
+          desiredVZ = dcos(this.yaw) * adv;
           this.vx = desiredVX;
           this.vz = desiredVZ;
         }
@@ -258,7 +259,7 @@ export class Fighter {
       this.vx += (desiredVX - this.vx) * k;
       this.vz += (desiredVZ - this.vz) * k;
     } else if (this.state === 'hitstun' || this.state === 'blockstun' || this.state === 'ko' || this.state === 'victory' || this.state === 'down') {
-      const f = Math.exp(-7 * DT);
+      const f = 0.8898817709880238; // Math.exp(-7 / 60), precomputed (deterministic)
       this.vx *= f;
       this.vz *= f;
     } else if (this.state === 'attack' && this.attackPhase === 'recovery') {
@@ -272,17 +273,17 @@ export class Fighter {
     this.x = clamp(this.x, -lim, lim);
     this.z = clamp(this.z, -lim, lim);
 
-    const speed = Math.hypot(this.vx, this.vz);
+    const speed = dhypot(this.vx, this.vz);
     this.stepPhase += DT * (5.2 + speed * 3.2);
 
     this.regenStamina();
   }
 
   private footworkVelocity(intent: FighterIntent): [number, number] {
-    const mag = Math.min(1, Math.hypot(intent.moveX, intent.moveZ));
+    const mag = Math.min(1, dhypot(intent.moveX, intent.moveZ));
     if (mag < 0.08) return [0, 0];
-    const fx = Math.sin(this.yaw);
-    const fz = Math.cos(this.yaw);
+    const fx = dsin(this.yaw);
+    const fz = dcos(this.yaw);
     // Decompose into forward/back and lateral components relative to facing.
     const fwd = intent.moveX * fx + intent.moveZ * fz;
     const lat = intent.moveX * fz - intent.moveZ * fx;
@@ -298,11 +299,11 @@ export class Fighter {
   private startDash(intent: FighterIntent) {
     let dx = intent.moveX;
     let dz = intent.moveZ;
-    const m = Math.hypot(dx, dz);
+    const m = dhypot(dx, dz);
     if (m < 0.2) {
       // No direction: back-step dash (classic evasive footwork).
-      dx = -Math.sin(this.yaw);
-      dz = -Math.cos(this.yaw);
+      dx = -dsin(this.yaw);
+      dz = -dcos(this.yaw);
     } else {
       dx /= m;
       dz /= m;
@@ -349,7 +350,7 @@ export class Fighter {
   private latchImpact(opp: Fighter) {
     const a = this.attack!;
     const nominal = a.move.impact[a.height];
-    const d = Math.hypot(opp.x - this.x, opp.z - this.z);
+    const d = dhypot(opp.x - this.x, opp.z - this.z);
     const depth = a.height === 'head' ? 0.08 : 0.14;
     const minF = a.move.chamber[2] + 0.18;
     const f = clamp(d - depth, minF, nominal[2]);
@@ -367,8 +368,8 @@ export class Fighter {
     const t = smoothstep(clamp(progress, 0, 1));
     const m = this.mirror;
     const local: V3 = [(c[0] + (i[0] - c[0]) * t) * m, c[1] + (i[1] - c[1]) * t, c[2] + (i[2] - c[2]) * t];
-    const cs = Math.cos(this.yaw);
-    const sn = Math.sin(this.yaw);
+    const cs = dcos(this.yaw);
+    const sn = dsin(this.yaw);
     return [this.x + local[0] * cs + local[2] * sn, local[1], this.z - local[0] * sn + local[2] * cs];
   }
 
@@ -377,7 +378,7 @@ export class Fighter {
     let rate = 0;
     switch (this.state) {
       case 'idle':
-        rate = Math.hypot(this.vx, this.vz) > 0.3 ? 11 : 17;
+        rate = dhypot(this.vx, this.vz) > 0.3 ? 11 : 17;
         break;
       case 'guard':
         rate = 6;

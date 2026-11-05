@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { audio } from '../game/audio/AudioEngine';
 import type { GameSession } from '../game/GameSession';
 import { BELT_ORDER, BELT_REQUIREMENTS, nextBelt } from '../game/progress/progress';
+import { net } from '../game/netplay/NetClient';
 import { useGameStore } from '../store/useGameStore';
+import { useNet } from './Friend';
 import { BackButton, BeltMarker, Hints, Menu as MenuList, PrimaryButton, QuietButton, useGamepadNav } from './kit';
 import { SettingsPanel } from './SettingsPanel';
 
@@ -13,6 +15,8 @@ const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.max(0, s) %
 function useContextLine(session: GameSession) {
   const mode = useGameStore((s) => s.mode);
   const difficulty = useGameStore((s) => s.difficulty);
+  const versus = useGameStore((s) => s.versus);
+  if (versus) return `${mode === 'competitive' ? 'Competitive' : 'Arcade'} · ${versus.kind === 'online' ? 'online' : 'same device'}`;
   if (session.training) return `Training · ${session.training.activity.title}`;
   return `${mode === 'competitive' ? 'Competitive' : 'Arcade'} · ${OPP_BELT[difficulty]}`;
 }
@@ -39,10 +43,16 @@ export function PauseMenu({ session }: { session: GameSession }) {
   }, [paused]);
   if (!paused) return null;
   const comp = !!session.competitive;
+  const online = !!session.net;
+  const quit = () => {
+    if (online) net.leave();
+    toMenu(online ? 'friend' : 'home');
+  };
   return (
     <MatchPanel label="Paused">
       <p className="context">{context}</p>
-      <h1 className="title">{showSettings ? 'Settings' : 'Paused'}</h1>
+      <h1 className="title">{showSettings ? 'Settings' : online ? 'Menu' : 'Paused'}</h1>
+      {online && !showSettings && <p className="caption">The match keeps running online.</p>}
       {hud && !session.training && !showSettings && (
         <p className="scoreline" aria-label={comp ? `Points ${hud.points[0]} to ${hud.points[1]}` : `Rounds ${hud.wins[0]} to ${hud.wins[1]}`}>
           <span className="corner-tag chung">{hud.shortNames[0]}</span>
@@ -67,7 +77,10 @@ export function PauseMenu({ session }: { session: GameSession }) {
           <MenuList
             label="Pause menu"
             items={[
-              { id: 'resume', label: 'Resume', onSelect: () => setPaused(false), testid: 'resume' },
+              { id: 'resume', label: online ? 'Back to the match' : 'Resume', onSelect: () => setPaused(false), testid: 'resume' },
+              ...(online
+                ? []
+                : [
               {
                 id: 'restart',
                 label: session.training ? 'Restart activity' : 'Restart match',
@@ -76,6 +89,7 @@ export function PauseMenu({ session }: { session: GameSession }) {
                   setPaused(false);
                 },
               },
+                  ]),
               ...(session.training
                 ? [
                     {
@@ -90,7 +104,7 @@ export function PauseMenu({ session }: { session: GameSession }) {
                   ]
                 : []),
               { id: 'settings', label: 'Settings & controls', testid: 'pause-settings', onSelect: () => setShowSettings(true) },
-              { id: 'quit', label: 'Quit to menu', testid: 'quit-to-menu', onSelect: toMenu },
+              { id: 'quit', label: online ? 'Leave the match' : 'Quit to menu', testid: 'quit-to-menu', onSelect: quit },
             ]}
           />
           <Hints
@@ -137,16 +151,19 @@ export function ResultOverlay({ session }: { session: GameSession }) {
   const clearPromotion = useGameStore((s) => s.clearPromotion);
   const context = useContextLine(session);
   const over = !!hud && hud.phase === 'match-over';
+  const online = !!session.net;
   useEffect(() => {
-    if (!over) return;
+    if (!over || online) return;
     const k = (e: KeyboardEvent) => e.key === 'Escape' && toMenu();
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
-  }, [over, toMenu]);
-  useGamepadNav(over ? toMenu : undefined);
+  }, [over, toMenu, online]);
+  useGamepadNav(over && !online ? toMenu : undefined);
   if (!hud || !over) return null;
+  if (session.net) return <OnlineResult session={session} context={context} />;
   const w = hud.matchWinner;
-  const title = w === 0 ? 'You win' : w === 1 ? 'You lose' : 'Draw';
+  const couch = !!useGameStore.getState().versus;
+  const title = w === null ? 'Draw' : couch ? `${hud.names[w]} wins` : w === 0 ? 'You win' : 'You lose';
   const comp = session.competitive;
   return (
     <MatchPanel label="Match result" testid="result">
@@ -179,6 +196,50 @@ export function ResultOverlay({ session }: { session: GameSession }) {
         </PrimaryButton>
         <QuietButton hint="Esc" onClick={toMenu} testid="to-menu">
           Back to menu
+        </QuietButton>
+      </div>
+    </MatchPanel>
+  );
+}
+
+/** Online result: rematch when both agree (corners swap), back to the lobby, or leave. */
+function OnlineResult({ session, context }: { session: GameSession; context: string }) {
+  const hud = useGameStore((s) => s.hud)!;
+  const s = useNet();
+  const w = hud.matchWinner;
+  const title = w === null ? 'Draw' : w === session.me ? 'You win' : 'You lose';
+  const peerName = s.peer?.nick || 'Your friend';
+  return (
+    <MatchPanel label="Match result" testid="result">
+      <p className="context">{context} · match over</p>
+      <div className="result-head">
+        <h1 className="title">{title}</h1>
+        <p className="big-score" aria-label={`Rounds ${hud.wins[0]} to ${hud.wins[1]}`}>
+          {hud.wins[0]} – {hud.wins[1]}
+        </p>
+      </div>
+      <div className="panel-scroll">
+        {session.competitive ? <CompetitiveSummary session={session} /> : <p className="body-copy">{w === null ? 'An even match.' : `${hud.names[w]} takes the match.`}</p>}
+        <p className="caption" role="status">
+          {!s.peerPresent ? `${peerName} left.` : s.rematch.me ? `Waiting for ${peerName}…` : s.rematch.peer ? `${peerName} wants a rematch.` : 'Corners swap on a rematch.'}
+        </p>
+        <PromotionNote />
+      </div>
+      <div className="actions">
+        <PrimaryButton hint="Enter" autoFocus testid="rematch" disabled={s.rematch.me || !s.peerPresent} onClick={() => net.requestRematch()}>
+          Rematch
+        </PrimaryButton>
+        <QuietButton onClick={() => net.backToLobby()} testid="to-lobby">
+          Back to lobby
+        </QuietButton>
+        <QuietButton
+          onClick={() => {
+            net.leave();
+            useGameStore.getState().toMenu('friend');
+          }}
+          testid="leave-room"
+        >
+          Leave
         </QuietButton>
       </div>
     </MatchPanel>

@@ -9,6 +9,7 @@ import { type MenuPanel, useGameStore } from '../store/useGameStore';
 import { BeltMarker, GroupLabel, Hints, Menu as MenuList, type MenuEntry, OptionGroup, OptionRow, PrimaryButton, QuietButton, ScreenShell, Segmented, useGamepadNav, Wordmark } from './kit';
 import { MenuBackdrop, prefersReducedMotion } from './MenuBackdrop';
 import { PwaHint } from './PwaHint';
+import { FriendSetup, OnlineLobby } from './Friend';
 import { ControlsReference, SettingsPanel } from './SettingsPanel';
 
 const DIFFS: { id: Difficulty; label: string; note: string; belt: keyof typeof BELT_COLORS }[] = [
@@ -81,6 +82,8 @@ export function Menu() {
         {panel === 'home' && <Home go={go} />}
         {panel === 'spar' && <SparSetup onBack={home} leave={leave} />}
         {panel === 'training' && <TrainingSelect onBack={home} leave={leave} />}
+        {panel === 'friend' && <FriendSetup onBack={home} leave={leave} go={go} />}
+        {panel === 'online' && <OnlineLobby onBack={() => go('friend')} />}
         {panel === 'fighter' && <FighterSelect onBack={home} go={go} />}
         {panel === 'progress' && <BeltProgression onBack={home} go={go} />}
         {(panel === 'settings' || panel === 'controls') && <SettingsScreen onBack={home} />}
@@ -112,6 +115,7 @@ function Home({ go }: { go: (p: MenuPanel) => void }) {
     },
     { id: 'arcade', label: 'Arcade sparring', description: 'Health-based · knock out or lead on time · best of three', testid: 'mode-arcade', onSelect: () => spar('arcade') },
     { id: 'competitive', label: 'Competitive sparring', description: 'WT-style points and gam-jeom · best of three', testid: 'mode-competitive', onSelect: () => spar('competitive') },
+    { id: 'friend', label: 'Play a friend', description: 'Same device or online · best of three', testid: 'mode-friend', onSelect: () => go('friend') },
     { id: 'fighter', tier: 2, label: 'Choose fighter', description: `${c.name}`, testid: 'open-fighter', onSelect: () => go('fighter') },
     {
       id: 'progress',

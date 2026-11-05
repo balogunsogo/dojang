@@ -1,3 +1,4 @@
+import { dhypot, dsin, dcos, datan2 } from './dmath';
 export interface Vec2 {
   x: number;
   z: number;
@@ -7,7 +8,7 @@ export type V3 = [number, number, number];
 export const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const smoothstep = (t: number) => t * t * (3 - 2 * t);
-export const len2 = (x: number, z: number) => Math.hypot(x, z);
+export const len2 = (x: number, z: number) => dhypot(x, z);
 export const DEG = Math.PI / 180;
 
 /** Wrap an angle to (-PI, PI]. */
@@ -25,15 +26,15 @@ export function approachAngle(a: number, b: number, maxStep: number): number {
 }
 
 /** Yaw (around +Y) of a world direction, with yaw 0 facing +Z. */
-export const yawOf = (x: number, z: number) => Math.atan2(x, z);
+export const yawOf = (x: number, z: number) => datan2(x, z);
 
 /**
  * Convert a point in a fighter's local frame [side(+left), up, forward] to world
  * coordinates, given the fighter's ground position and yaw.
  */
 export function localToWorld(px: number, pz: number, yaw: number, p: V3): V3 {
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
+  const c = dcos(yaw);
+  const s = dsin(yaw);
   // R_y(yaw) * (x, y, z) with x = side, z = forward
   return [px + p[0] * c + p[2] * s, p[1], pz - p[0] * s + p[2] * c];
 }

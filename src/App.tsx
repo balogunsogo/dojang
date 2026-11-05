@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
 import { audio } from './game/audio/AudioEngine';
 import { useGameStore } from './store/useGameStore';
+import { roomFromUrl, useOnlineMatchStarter } from './ui/Friend';
 import { MatchScreen } from './ui/MatchScreen';
 import { Menu } from './ui/Menu';
 
@@ -69,6 +70,8 @@ export function App() {
     const m = params.get('mode');
     const mode = m === 'competitive' || m === 'training' ? m : 'arcade';
     if (auto === 'easy' || auto === 'normal' || auto === 'hard') useGameStore.getState().startMatch(auto, mode);
+    // Invite link: open the join screen.
+    if (roomFromUrl()) useGameStore.getState().setMenuPanel('online');
     // Block iOS pinch-zoom gestures inside the game.
     const block = (e: Event) => e.preventDefault();
     document.addEventListener('gesturestart', block);
@@ -96,6 +99,7 @@ export function App() {
     };
   }, []);
 
+  useOnlineMatchStarter();
   if (screen === 'menu') return <Menu />;
   if (!webglAvailable())
     return (
