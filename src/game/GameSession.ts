@@ -134,6 +134,7 @@ export class GameSession {
   /** Online rollback (null offline). */
   readonly net: Rollback | null = null;
   private seenEvents = new Map<string, number>();
+  private overFrame: number | null = null;
 
   constructor(o: SessionOptions) {
     this.o = o;
@@ -179,6 +180,7 @@ export class GameSession {
     this.o.scene.add(this.fx.group);
     this.syncPrev();
     this.ready = true;
+    audio.player = this.me;
     audio.setAmbient(true);
   }
 
@@ -316,8 +318,8 @@ export class GameSession {
     this.camRig.input(actions.camYaw, actions.camPitch, actions.camZoom);
 
     const w = this.world;
-    const p = w.fighters[this.me];
-    const o = w.fighters[1 - this.me];
+    let p = w.fighters[this.me];
+    let o = w.fighters[1 - this.me];
     const a2 = this.o.input2?.poll();
     if (a2?.pause) this.o.callbacks.onPauseToggle();
     if (this.net) this.netFrame(dt, actions);
@@ -353,6 +355,9 @@ export class GameSession {
       this.o.input.consumeEdges();
       this.o.input2?.consumeEdges();
     }
+    // A rollback replaces the fighter objects: read them again.
+    p = w.fighters[this.me];
+    o = w.fighters[1 - this.me];
     const t1 = performance.now();
 
     // Render interpolation.
@@ -424,6 +429,7 @@ export class GameSession {
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
+    net.flush();
     for (const { f, e } of net.events) {
       const who = 'fighter' in e ? e.fighter : 'attacker' in e ? e.attacker : '';
       const key = `${f}|${e.type}|${who}`;
@@ -434,9 +440,11 @@ export class GameSession {
     net.events.length = 0;
     if (this.seenEvents.size > 400) for (const [k, f] of this.seenEvents) if (f < net.frame - 240) this.seenEvents.delete(k);
     this.handleEvents();
-    // The result counts only once every input behind it is confirmed.
+    // The result counts only once every input up to the end of the match is confirmed.
     const w = this.world;
-    if (w.phase === 'match-over' && net.confirmed && !this.matchReported) {
+    if (w.phase !== 'match-over') this.overFrame = null;
+    else if (this.overFrame === null) this.overFrame = net.frame;
+    if (this.overFrame !== null && net.remoteHead >= this.overFrame && !net.pending && !this.matchReported) {
       this.matchReported = true;
       audio.matchEnd(w.matchWinner === this.me);
       this.o.callbacks.onMatchEnd?.(w.matchWinner === this.me);

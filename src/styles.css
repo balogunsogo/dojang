@@ -11,13 +11,13 @@
   color: var(--fg);
 }
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; width: 100%; overflow: hidden; background: var(--fg); }
+html, body, #root { margin: 0; height: 100%; width: 100%; overflow: hidden; background: #15120f; }
 body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
 .perf { position: absolute; left: calc(8px + var(--sal)); top: calc(78px + var(--sat)); font: 11px/1.4 ui-monospace, monospace; background: rgba(0, 0, 0, 0.6); padding: 6px 8px; border-radius: 6px; pointer-events: none; z-index: 30; color: var(--fg); }
 
 /* Match */
-.match { position: fixed; inset: 0; }
+.match { position: fixed; inset: 0; background: #1a1510; }
 .game-canvas { position: absolute !important; inset: 0; touch-action: none; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; font-size: 18px; color: var(--muted); background: #16130f; }
 .loading.error { color: #ff8a7a; }

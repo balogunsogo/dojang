@@ -46,6 +46,8 @@ export class DynamicResolution {
   dpr: number;
   private over = 0;
   private under = 0;
+  /** Times the resolution had to drop; each one makes raising it again more cautious. */
+  private drops = 0;
   constructor(private profile: QualityProfile, deviceDpr: number) {
     this.dpr = Math.min(profile.maxDpr, deviceDpr);
   }
@@ -65,9 +67,11 @@ export class DynamicResolution {
     if (this.over > 1.5 && this.dpr > min) {
       this.dpr = Math.max(min, +(this.dpr - 0.15).toFixed(2));
       this.over = 0;
+      this.drops++;
       return this.dpr;
     }
-    if (this.under > 4 && this.dpr < max) {
+    // Avoid see-sawing (each change resizes the canvas): wait longer after every drop.
+    if (this.under > Math.min(30, 4 + 8 * this.drops) && this.dpr < max) {
       this.dpr = Math.min(max, +(this.dpr + 0.1).toFixed(2));
       this.under = 0;
       return this.dpr;

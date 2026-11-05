@@ -159,7 +159,7 @@ export function MatchScreen() {
         className="game-canvas"
         dpr={[profile.minDpr, profile.maxDpr]}
         shadows={profile.shadows ? 'soft' : false}
-        gl={{ antialias: profile.antialias, powerPreference: 'high-performance', stencil: false }}
+        gl={{ antialias: profile.antialias, powerPreference: 'high-performance', stencil: false, alpha: false }}
         camera={{ fov: 50, near: 0.1, far: 60, position: [0, 2, -5] }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;

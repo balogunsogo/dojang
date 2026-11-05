@@ -1,4 +1,4 @@
-import { type PointerEvent as RPointerEvent, type ReactNode, useRef, useState } from 'react';
+import { type PointerEvent as RPointerEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import type { InputManager } from '../game/input/InputManager';
 import { useGameStore } from '../store/useGameStore';
 import { KICK_LABEL, pickWheel, WHEEL_HEAD_RADIUS, WHEEL_ITEMS, WHEEL_LEAD_EDGE, WHEEL_LEAD_RADIUS, WHEEL_RADIUS, type WheelKick, type WheelPick } from './wheel';
@@ -38,6 +38,33 @@ export function TouchControls({ input }: { input: InputManager }) {
   const [high, setHigh] = useState(false);
   const [lead, setLead] = useState(false);
   const R = 52;
+
+  // A release the element never received (system gesture, app switch) must not leave a control stuck.
+  useEffect(() => {
+    const release = (e: PointerEvent) => {
+      if (stick.current?.id === e.pointerId) {
+        stick.current = null;
+        t.moveX = t.moveY = 0;
+        if (knobRef.current) knobRef.current.style.transform = '';
+        baseRef.current?.classList.remove('active');
+      }
+      if (cam.current?.id === e.pointerId) cam.current = null;
+    };
+    const releaseAll = () => {
+      if (stick.current) release({ pointerId: stick.current.id } as PointerEvent);
+      cam.current = null;
+    };
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', releaseAll);
+    return () => {
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      window.removeEventListener('blur', releaseAll);
+      document.removeEventListener('visibilitychange', releaseAll);
+    };
+  }, [t]);
 
   const stickDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (stick.current) return;
@@ -112,8 +139,8 @@ export function TouchControls({ input }: { input: InputManager }) {
       onContextMenu={(e) => e.preventDefault()}
       data-testid="touch-controls"
     >
-      <div className="zone-cam" onPointerDown={camDown} onPointerMove={camMove} onPointerUp={camUp} onPointerCancel={camUp} data-testid="cam-zone" />
-      <div className="zone-stick" onPointerDown={stickDown} onPointerMove={stickMove} onPointerUp={stickUp} onPointerCancel={stickUp} data-testid="stick-zone">
+      <div className="zone-cam" onPointerDown={camDown} onPointerMove={camMove} onPointerUp={camUp} onPointerCancel={camUp} onLostPointerCapture={camUp} data-testid="cam-zone" />
+      <div className="zone-stick" onPointerDown={stickDown} onPointerMove={stickMove} onPointerUp={stickUp} onPointerCancel={stickUp} onLostPointerCapture={stickUp} data-testid="stick-zone">
         <div className="stick-base" ref={baseRef}>
           <div className="stick-knob" ref={knobRef} />
         </div>
@@ -207,6 +234,26 @@ function CompactCluster({ input, high, toggleHigh, mirror }: { input: InputManag
     setOpen(false);
     setPick(null);
   };
+  // Safety net: if the release never reaches the button (system gesture,
+  // notification, app switch), close the wheel instead of staying stuck open.
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+  useEffect(() => {
+    const release = (e: PointerEvent) => {
+      if (g.current?.id === e.pointerId) window.setTimeout(() => g.current?.id === e.pointerId && cancelRef.current(), 0);
+    };
+    const all = () => g.current && cancelRef.current();
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('blur', all);
+    document.addEventListener('visibilitychange', all);
+    return () => {
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      window.removeEventListener('blur', all);
+      document.removeEventListener('visibilitychange', all);
+    };
+  }, []);
   const [label, ko] = KICK_LABEL[selected];
 
   return (
@@ -241,6 +288,7 @@ function CompactCluster({ input, high, toggleHigh, mirror }: { input: InputManag
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onCancel}
+        onLostPointerCapture={(e) => g.current?.id === e.pointerId && onCancel()}
       >
         <span className="l">{label}</span>
         <span className="s">{ko}</span>
@@ -270,6 +318,7 @@ function TapButton({ cls, label, aria, onTap }: { cls: string; label: ReactNode;
       }}
       onPointerUp={() => setDown(false)}
       onPointerCancel={() => setDown(false)}
+      onLostPointerCapture={() => setDown(false)}
     >
       <span className="l">{label}</span>
     </div>
@@ -278,10 +327,29 @@ function TapButton({ cls, label, aria, onTap }: { cls: string; label: ReactNode;
 
 function HoldButton({ cls, label, onChange }: { cls: string; label: string; onChange: (v: boolean) => void }) {
   const [down, setDown] = useState(false);
+  const id = useRef<number | null>(null);
   const set = (v: boolean) => {
+    if (!v) id.current = null;
     setDown(v);
     onChange(v);
   };
+  // Never leave guard held if the release is missed.
+  const setRef = useRef(set);
+  setRef.current = set;
+  useEffect(() => {
+    const release = (e: PointerEvent) => id.current === e.pointerId && setRef.current(false);
+    const all = () => id.current !== null && setRef.current(false);
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('blur', all);
+    document.addEventListener('visibilitychange', all);
+    return () => {
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      window.removeEventListener('blur', all);
+      document.removeEventListener('visibilitychange', all);
+    };
+  }, []);
   return (
     <div
       className={`tb ${cls} ${down ? 'down' : ''}`}
@@ -289,6 +357,7 @@ function HoldButton({ cls, label, onChange }: { cls: string; label: string; onCh
       aria-label={label}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
+        id.current = e.pointerId;
         set(true);
       }}
       onPointerUp={() => set(false)}
