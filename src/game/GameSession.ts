@@ -363,15 +363,19 @@ export class GameSession {
 
     // Render interpolation.
     const frozen = this.paused && !this.net;
-    const alpha = w.hitstop > 0 || frozen ? 1 : this.acc / DT;
-    const animAlpha = w.hitstop > 0 || frozen ? 0 : this.acc / DT;
+    // Hit stop only freezes a live fight. A round can end on the same tick as
+    // the hit (a KO), and the world then keeps its hit-stop counter until the
+    // next round; it must not freeze the fall and the result sequence.
+    const stopped = (w.hitstop > 0 && (w.phase === 'fight' || w.phase === 'break')) || frozen;
+    const alpha = stopped ? 1 : this.acc / DT;
+    const animAlpha = stopped ? 0 : this.acc / DT;
     w.fighters.forEach((f, i) => {
       const pr = this.prev[i];
       const x = pr.x + (f.x - pr.x) * alpha;
       const z = pr.z + (f.z - pr.z) * alpha;
       const yaw = pr.yaw + wrapAngle(f.yaw - pr.yaw) * alpha;
       this.visYaw[i] = approachAngle(this.visYaw[i], yaw, 14 * dt);
-      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], w.hitstop > 0 || frozen ? 0 : dt);
+      this.anims[i].update(f, animAlpha, x, z, this.visYaw[i], stopped ? 0 : dt);
     });
     const t2 = performance.now();
     this.audioCues();
@@ -550,6 +554,9 @@ export class GameSession {
         break;
       case 'hit': {
         const heavy = e.counter || e.zone === 'head' || e.move.pushback > 3;
+        // The side a roundhouse arrives from (presentation: a finishing strike turns the fall).
+        const mir = this.world.fighters[e.attacker].mirror;
+        this.anims[e.defender]?.noteImpact(e.move.id === 'round' ? mir : e.move.id === 'leadRound' ? -mir : 0, e.zone);
         audio.impact(e.move.limb === 'rearHand' ? 'punch' : e.zone, e.counter || !!e.move.turning || (e.zone === 'head' && e.move.limb === 'rearFoot'), e.defender);
         this.fx?.spawn(e.point, heavy ? 'heavy' : 'hit');
         this.shake(heavy ? 0.07 : 0.035);
