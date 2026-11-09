@@ -40,7 +40,28 @@ const _w = new THREE.Vector3();
 
 type Source =
   | { kind: 'pose'; key: string; pose: Pose; planted: boolean }
-  | { kind: 'clip'; key: string; clip: string; time: number; loop: boolean };
+  | { kind: 'clip'; key: string; clip: string; time: number; loop: boolean; legRest?: number };
+
+// Knockout / knockdown fall, built on the CC0 Death01 clip (seconds into it).
+// The clip's first 0.55 s is an upright stagger out of stance; the fall
+// enters after it, so the knees give way straight from the impact reaction.
+const FALL_IN = 0.55;
+/** Body reaches the mat. */
+const FALL_LAND = 1.5;
+/** Fully settled. */
+const FALL_END = 2.36;
+/** Ticks of impact reaction before the knees go (finishing strike only). */
+const FALL_IMPACT = 8;
+/** Turn away from a strike that came from the side (deg). */
+const FALL_TURN = 30;
+/** Death01 times sampled at load to find the skin vertices that come closest to the mat. */
+const PROBE_TIMES = [...Array.from({ length: 15 }, (_, i) => 0.8 + i * 0.05), 1.7, 2.0, FALL_END];
+const PROBE_PER_TIME = 24;
+/** Probe vertex indices per mesh layout (same character = same layout, so rematches and mirror matches reuse it). */
+const probeCache = new Map<string, [number, number][]>();
+
+/** How strongly the legs are eased toward rest at a Death01 time (the clip kicks them up on landing). */
+const legCalm = (c: number) => (c < 1.3 ? 0.8 * smoothstep(clamp((c - 0.88) / 0.2, 0, 1)) : 0.8 + 0.2 * smoothstep(clamp((c - 1.3) / 0.2, 0, 1)));
 
 /** Smooth, non-repeating noise in about [-1, 1] (sum of incommensurate sines). */
 const noise = (t: number, seed: number) =>
@@ -108,6 +129,16 @@ export class FighterAnimator {
   private prevStepT = [0, 0];
   private prevSpeed = 0;
 
+  /** Knockout / knockdown fall: impact side and zone, latched when the fall starts. */
+  private fall: { side: number; zone: 'body' | 'head'; impact: boolean } | null = null;
+  private noted: { side: number; zone: 'body' | 'head' } | null = null;
+  /** Visual turn of the falling body away from a side strike (rad). */
+  private fallYaw = 0;
+  private legBones: THREE.Bone[] = [];
+  /** Skin vertices checked against the mat while falling or down (picked once, at load). */
+  private probe: { mesh: THREE.SkinnedMesh; i: number }[] = [];
+  private legRest: THREE.Quaternion[] | null = null;
+
   /** Debug: force a pose (pose lab). */
   overridePose: Pose | null = null;
 
@@ -152,6 +183,7 @@ export class FighterAnimator {
       this.fingers.push({ bone, fist: bone.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(X, ang)) });
     }
 
+    this.legBones = [b.thighL, b.shinL, b.footL, b.thighR, b.shinR, b.footR];
     this.mixer = new THREE.AnimationMixer(model);
     for (const clip of clips) {
       const action = this.mixer.clipAction(clip);
@@ -160,6 +192,7 @@ export class FighterAnimator {
       action.enabled = false;
       this.actions.set(clip.name, action);
     }
+    this.buildFloorProbe();
   }
 
   /**
@@ -171,7 +204,7 @@ export class FighterAnimator {
    */
   update(f: Fighter, alpha: number, x: number, z: number, yaw: number, dt = TICK) {
     this.group.position.set(x, 0, z);
-    this.group.rotation.set(0, yaw, 0);
+    this.group.rotation.set(0, yaw + this.fallYaw, 0);
     this.group.updateMatrixWorld(true);
     this.time += dt;
 
@@ -192,7 +225,16 @@ export class FighterAnimator {
 
     if (src.kind === 'clip') {
       this.planner.deactivate();
+      if (src.legRest !== undefined && !this.legRest) {
+        // The clip's resting leg pose, sampled once (the target for calming the legs).
+        this.applyClip(src.clip, FALL_END, false);
+        this.legRest = this.legBones.map((bn) => bn.quaternion.clone());
+      }
       this.applyClip(src.clip, src.time, src.loop);
+      if (src.legRest) {
+        // The clip flings the legs high as the body lands; ease them toward rest.
+        for (let i = 0; i < this.legBones.length; i++) this.legBones[i].quaternion.slerp(this.legRest![i], src.legRest);
+      }
     } else {
       const p = src.planted ? this.plantFeet(src.pose, f, dt) : (this.planner.deactivate(), src.pose);
       this.applyPose(p);
@@ -204,6 +246,76 @@ export class FighterAnimator {
       const w = 1 - (1 - this.fadeT) * (1 - this.fadeT);
       this.blendFromSnapshot(w);
     }
+    if (f.state === 'ko' || f.state === 'down') this.restOnFloor();
+  }
+
+  /** Lift the body so no part sinks into the mat while falling or lying. */
+  /**
+   * Pick the vertices that reach lowest during the fall and at rest, so the
+   * per-frame floor check stays a few hundred points (runs once, at load).
+   */
+  private buildFloorProbe() {
+    if (!this.actions.has('Death01')) return;
+    const meshes: THREE.SkinnedMesh[] = [];
+    this.group.traverse((o) => (o as THREE.SkinnedMesh).isSkinnedMesh && meshes.push(o as THREE.SkinnedMesh));
+    this.applyClip('Death01', FALL_END, false);
+    this.legRest = this.legBones.map((bn) => bn.quaternion.clone());
+    const layout = meshes.map((m) => m.geometry.attributes.position.count).join('/');
+    const cached = probeCache.get(layout);
+    if (cached) {
+      this.probe = cached.map(([mi, i]) => ({ mesh: meshes[mi], i }));
+      this.disableClips();
+      return;
+    }
+    const picked = new Set<string>();
+    const indices: [number, number][] = [];
+    for (const tc of PROBE_TIMES) {
+      this.applyClip('Death01', tc, false);
+      for (let i = 0; i < this.legBones.length; i++) this.legBones[i].quaternion.slerp(this.legRest[i], legCalm(tc));
+      this.group.updateMatrixWorld(true);
+      const all: { m: number; i: number; y: number }[] = [];
+      meshes.forEach((m, mi) => {
+        const n = m.geometry.attributes.position.count;
+        for (let i = 0; i < n; i += 3) {
+          m.getVertexPosition(i, _w);
+          m.localToWorld(_w);
+          all.push({ m: mi, i, y: _w.y });
+        }
+      });
+      all.sort((a, c) => a.y - c.y);
+      for (const v of all.slice(0, PROBE_PER_TIME)) {
+        const key = `${v.m}:${v.i}`;
+        if (picked.has(key)) continue;
+        picked.add(key);
+        indices.push([v.m, v.i]);
+        this.probe.push({ mesh: meshes[v.m], i: v.i });
+      }
+    }
+    probeCache.set(layout, indices);
+    this.disableClips();
+  }
+
+  /** Lift the body so no part sinks into the mat while falling or lying. */
+  private restOnFloor() {
+    this.group.updateMatrixWorld(true);
+    let low = Infinity;
+    for (const { mesh, i } of this.probe) {
+      mesh.getVertexPosition(i, _w);
+      mesh.localToWorld(_w);
+      if (_w.y < low) low = _w.y;
+    }
+    const lift = -low;
+    if (!(lift > 0)) return;
+    const h = this.b.hips;
+    h.getWorldPosition(_w);
+    _w.y += lift;
+    setWorldPos(h, _w);
+    h.updateMatrixWorld(true);
+  }
+
+  /** The finishing strike's side and zone (from the hit event; knockdowns clear the sim's reaction). */
+  noteImpact(side: number, zone: 'body' | 'head') {
+    this.noted = { side, zone };
   }
 
   /** Cross-fade length in seconds for a new source. */
@@ -211,13 +323,21 @@ export class FighterAnimator {
     if (key.startsWith('attack')) return 0.06;
     if (key.startsWith('hit')) return 0.05;
     if (key.startsWith('block')) return 0.05;
-    if (key.startsWith('ko')) return 0.12;
+    if (key.endsWith('-fall')) return 0.16;
+    if (key === 'down-rise') return 0.12;
+    if (key === 'down-up') return 0.2;
+    if (key.endsWith('-hit')) return 0.06;
     if (key.startsWith('victory')) return 0.35;
     return 0.14;
   }
 
   private pickSource(f: Fighter, alpha: number, dt: number): Source {
     const t = f.stateTick + alpha;
+    if (f.state !== 'ko' && f.state !== 'down') {
+      this.fall = null;
+      this.fallYaw = 0;
+      if (f.state !== 'hitstun') this.noted = null;
+    }
     const mirror = f.stance === 'southpaw';
     const m = (p: Pose) => (mirror ? mirrorPose(p) : p);
     this.updateMotionState(f, dt);
@@ -245,19 +365,9 @@ export class FighterAnimator {
         const info = r ? { zone: r.zone, heavy: r.heavy, side: r.side * f.mirror } : null;
         return { kind: 'pose', key: 'block', pose: m(blockPose(base, info, e)), planted: true };
       }
-      case 'down': {
-        // Fall (CC0 Death01, first 0.9 s), stay down, then rise by playing it back.
-        const fallEnd = 0.9;
-        const total = Math.max(1, f.stunTicks) / 60;
-        const tt = t / 60;
-        const rise = Math.min(0.75, total * 0.35);
-        const time = tt < fallEnd ? tt : tt > total - rise ? Math.max(0, fallEnd * ((total - tt) / rise)) : fallEnd;
-        return { kind: 'clip', key: 'down', clip: 'Death01', time, loop: false };
-      }
-      case 'ko': {
-        const dur = this.actions.get('Death01')?.getClip().duration ?? 2;
-        return { kind: 'clip', key: 'ko', clip: 'Death01', time: Math.min(dur - 0.01, t / 60), loop: false };
-      }
+      case 'down':
+      case 'ko':
+        return this.fallSource(f, t);
       case 'victory': {
         const dur = this.actions.get('Idle_Loop')?.getClip().duration ?? 2.5;
         return { kind: 'clip', key: 'victory', clip: 'Idle_Loop', time: (t / 60) % dur, loop: true };
@@ -290,6 +400,66 @@ export class FighterAnimator {
         return { kind: 'pose', key: 'loco', pose: m(this.stanceLife(f, 0)), planted: true };
       }
     }
+  }
+
+  /**
+   * Knockout (stays down) and Competitive knockdown (gets back up when the
+   * sim's down time ends). Driven only by sim state and time in state:
+   *  1. a short reaction to the finishing strike, feet planted;
+   *  2. knees and hips give way into the Death01 fall, turned slightly away
+   *     from a side strike, the legs calmed instead of flung up;
+   *  3. the body settles onto the mat (see restOnFloor);
+   *  4. knockdown only: sit up (the fall reversed), crouch, back to stance.
+   */
+  private fallSource(f: Fighter, t: number): Source {
+    const ko = f.state === 'ko';
+    const pre = ko ? 'ko' : 'down';
+    if (!this.fall || !this.sourceKey.startsWith(pre)) {
+      const r = f.hitReaction ?? this.noted;
+      const selfFall = !ko && f.downCause === 'fall';
+      this.fall = { side: selfFall ? 0 : (r?.side ?? 0), zone: r?.zone ?? 'body', impact: !selfFall };
+    }
+    const fl = this.fall;
+    const A = fl.impact ? FALL_IMPACT : 0;
+    const total = ko ? Infinity : Math.max(1, f.stunTicks);
+    const riseLen = ko ? 0 : clamp(Math.round(total * 0.42), 30, 60);
+    const riseAt = total - riseLen;
+    const fallTicks = ko ? 54 : clamp(riseAt - A - 6, 24, 54);
+    const rate = ((FALL_LAND - FALL_IN) * 60) / fallTicks;
+    // Clip time for a time in state: the fall at `rate`, then settling in real time.
+    const clipAt = (tt: number) => {
+      const c = FALL_IN + (Math.max(0, tt - A) / 60) * rate;
+      return c <= FALL_LAND ? c : Math.min(FALL_END, FALL_LAND + (c - FALL_LAND) / rate);
+    };
+    const turn = (fl.side * FALL_TURN * Math.PI) / 180;
+    if (t < A) {
+      // 1. The finishing strike lands: a full reaction, the knees start to go.
+      const k = t / A;
+      const base = this.stanceLife(f, 0);
+      const out = hitPose(base, { zone: fl.zone, heavy: true, side: fl.side * f.mirror }, smoothstep(clamp(t / 3, 0, 1)));
+      out.hips[1] -= 0.06 * k * k;
+      out.lArm.p = [out.lArm.p[0], out.lArm.p[1] - 0.08 * k, out.lArm.p[2]];
+      out.rArm.p = [out.rArm.p[0], out.rArm.p[1] - 0.08 * k, out.rArm.p[2]];
+      this.fallYaw = 0;
+      return { kind: 'pose', key: `${pre}-hit`, pose: f.stance === 'southpaw' ? mirrorPose(out) : out, planted: true };
+    }
+    if (t < riseAt) {
+      // 2-3. Fall and settle.
+      const c = clipAt(t);
+      this.fallYaw = turn * smoothstep(clamp((c - FALL_IN) / (1.0 - FALL_IN), 0, 1));
+      return { kind: 'clip', key: `${pre}-fall`, clip: 'Death01', time: c, loop: false, legRest: legCalm(c) };
+    }
+    // 4. Knockdown: get back up before the sim returns the fighter to stance.
+    const u = clamp((t - riseAt) / riseLen, 0, 1);
+    this.fallYaw = turn * (1 - smoothstep(u));
+    if (u < 0.6) {
+      const from = Math.min(clipAt(riseAt), FALL_LAND);
+      const c = lerp(from, 0.72, smoothstep(u / 0.6));
+      return { kind: 'clip', key: 'down-rise', clip: 'Death01', time: c, loop: false, legRest: legCalm(c) };
+    }
+    const crouch = derive(GUARD, { hips: [0, 0.62, -0.08], pitch: 26 });
+    const out = lerpPose(crouch, this.stanceLife(f, 1), smoothstep((u - 0.6) / 0.4));
+    return { kind: 'pose', key: 'down-up', pose: f.stance === 'southpaw' ? mirrorPose(out) : out, planted: false };
   }
 
   /** Track smoothed local velocity/acceleration and the guard weight. */
