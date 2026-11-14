@@ -1,19 +1,10 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
 import { audio } from './game/audio/AudioEngine';
+import { webglAvailable } from './game/render/webgl';
 import { useGameStore } from './store/useGameStore';
 import { roomFromUrl, useOnlineMatchStarter } from './ui/Friend';
 import { MatchScreen } from './ui/MatchScreen';
 import { Menu } from './ui/Menu';
-
-/** Can this browser create a WebGL context at all? */
-export function webglAvailable(): boolean {
-  try {
-    const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
-  } catch {
-    return false;
-  }
-}
 
 /** Catches render/runtime errors in the match so the player never gets a blank screen. */
 class MatchBoundary extends Component<{ children: ReactNode }, { error: string | null }> {

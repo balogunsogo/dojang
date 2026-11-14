@@ -57,6 +57,7 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
             netHost: versus.host,
             input2: input2 ?? undefined,
             net: versus.kind === 'online' ? net.link : undefined,
+            netHold: () => net.holding,
           }
         : {}),
       callbacks: {

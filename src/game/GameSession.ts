@@ -68,6 +68,8 @@ export interface SessionOptions {
   net?: NetLink;
   /** Online: this player hosts the room (its state wins on a desync). */
   netHost?: boolean;
+  /** Online: true while the match is paused for both players (or counting down to resume). */
+  netHold?: () => boolean;
   /** Player names shown on the HUD (couch / online). */
   names?: [string, string];
   callbacks: SessionCallbacks;
@@ -362,7 +364,7 @@ export class GameSession {
     const t1 = performance.now();
 
     // Render interpolation.
-    const frozen = this.paused && !this.net;
+    const frozen = this.paused;
     // Hit stop only freezes a live fight. A round can end on the same tick as
     // the hit (a KO), and the world then keeps its hit-stop counter until the
     // next round; it must not freeze the fall and the result sequence.
@@ -420,7 +422,11 @@ export class GameSession {
    */
   private netFrame(dt: number, actions: ActionState) {
     const net = this.net!;
-    this.acc += dt;
+    // Paused for both players: no ticks, but inputs keep flowing (no false disconnects).
+    if (this.o.netHold?.()) {
+      this.acc = 0;
+      this.o.input.consumeEdges();
+    } else this.acc += dt;
     let steps = 0;
     while (this.acc >= DT && steps < MAX_STEPS_PER_FRAME) {
       this.syncPrevPositions();
@@ -454,6 +460,11 @@ export class GameSession {
       audio.matchEnd(w.matchWinner === this.me);
       this.o.callbacks.onMatchEnd?.(w.matchWinner === this.me);
     }
+  }
+
+  /** Name for calls and tables: the players' own names in couch and online play, else the fighter's. */
+  shortName(i: 0 | 1): string {
+    return this.o.names?.[i] ?? this.defs[i].short;
   }
 
   /** Online: ms since the other player was last heard from. */
@@ -593,7 +604,7 @@ export class GameSession {
       }
       case 'round-end': {
         if (!this.training) audio.roundEnd(!!this.competitive);
-        const who = e.winner === null ? 'Round drawn' : `${this.defs[e.winner].short} wins the round`;
+        const who = e.winner === null ? 'Round drawn' : `${this.shortName(e.winner)} wins the round`;
         const why = e.detail ?? (e.reason === 'time' ? 'Time' : e.reason === 'ko' ? 'K.O.' : '');
         toast({ text: 'Keu-man!', sub: `${who}${why ? ` — ${why}` : ''}`, side: null, kind: 'call' }, 2600);
         break;
@@ -601,7 +612,7 @@ export class GameSession {
       case 'penalty': {
         audio.penalty();
         const opp = 1 - e.fighter;
-        toast({ text: `Gam-jeom · ${this.defs[e.fighter].short}`, sub: `${e.label} — +${e.pointsToOpponent} ${this.defs[opp].short}`, side: e.fighter, kind: 'penalty' }, 1800);
+        toast({ text: `Gam-jeom · ${this.shortName(e.fighter)}`, sub: `${e.label} — +${e.pointsToOpponent} ${this.shortName(opp as 0 | 1)}`, side: e.fighter, kind: 'penalty' }, 1800);
         if (e.reason === 'boundary') this.fx?.flashBoundary();
         break;
       }
@@ -611,7 +622,7 @@ export class GameSession {
       case 'down':
         audio.thud(e.fighter);
         this.shake(0.06);
-        if (e.cause === 'knockdown') toast({ text: 'Knockdown', sub: `${this.defs[e.fighter].short} is down`, side: null, kind: 'call' }, 1400);
+        if (e.cause === 'knockdown') toast({ text: 'Knockdown', sub: `${this.shortName(e.fighter)} is down`, side: null, kind: 'call' }, 1400);
         break;
       case 'match-end':
         if (!this.matchReported && !this.training) {
@@ -630,7 +641,7 @@ export class GameSession {
     const mine = w.fighters[this.me];
     this.o.callbacks.onHud({
       names: this.o.names ?? [this.defs[0].name, this.defs[1].name],
-      shortNames: [this.defs[0].short, this.defs[1].short],
+      shortNames: [this.shortName(0), this.shortName(1)],
       health: [p.health, o.health],
       maxHealth: [p.stats.maxHealth, o.stats.maxHealth],
       stamina: [p.stamina, o.stamina],
