@@ -58,6 +58,10 @@ export interface NetState {
   rematch: { me: boolean; peer: boolean };
   /** Bumps on every new match start. */
   matchId: number;
+  /** Online pause: both players are paused; it resumes on its own at `until` (ms timestamp). */
+  pause: { by: 'me' | 'peer'; until: number } | null;
+  /** After a resume, play continues at this time (a short countdown on both screens). */
+  resumeAt: number | null;
 }
 
 type Msg =
@@ -73,6 +77,7 @@ type Msg =
   | { t: 'ping'; ts: number }
   | { t: 'pong'; ts: number }
   | { t: 'rematch'; on: boolean }
+  | { t: 'pause'; on: boolean }
   | { t: 'lobby' }
   | { t: 'bye' };
 
@@ -90,6 +95,10 @@ export const ERRORS: Record<string, string> = {
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ICE: RTCIceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
 const COUNTDOWN_MS = 3000;
+/** How long an online pause lasts before the match resumes on its own. */
+export const PAUSE_MS = 30000;
+/** Countdown after a resume, so both players are ready. */
+export const RESUME_MS = 3000;
 const GIVE_UP_MS = 2 * 60 * 1000;
 
 /** Stable per browser, so a friend who closes the tab can rejoin with the same link. */
@@ -119,6 +128,7 @@ export class NetClient {
   private retryTimer = 0;
   private closedByUs = false;
   private droppedAt = 0;
+  private pauseTimer = 0;
   /** The running match's link (GameSession sets onMessage). */
   readonly link: NetLink = { send: (m) => this.sendFast({ t: 'g', m, id: this.state.matchId }), onMessage: null };
 
@@ -144,6 +154,8 @@ export class NetClient {
       countdownEnd: null,
       rematch: { me: false, peer: false },
       matchId: 0,
+      pause: null,
+      resumeAt: null,
     };
   }
 
@@ -192,6 +204,39 @@ export class NetClient {
     this.set({ rematch: { ...this.state.rematch, me: true } });
     this.sendWs({ t: 'rematch', on: true });
     this.maybeRematch();
+  }
+
+  /** Pause the match for both players (auto-resumes after PAUSE_MS). */
+  pauseMatch() {
+    if (this.state.status !== 'playing' || this.state.pause) return;
+    this.sendWs({ t: 'pause', on: true });
+    this.setPaused('me');
+  }
+
+  /** Resume for both players, after a short countdown. Either player can resume. */
+  resumeMatch() {
+    if (!this.state.pause) return;
+    this.sendWs({ t: 'pause', on: false });
+    this.setResumed();
+  }
+
+  /** The simulation should not advance (paused, or counting down to resume). */
+  get holding() {
+    const s = this.state;
+    return !!s.pause || (s.resumeAt !== null && s.resumeAt > Date.now());
+  }
+
+  private setPaused(by: 'me' | 'peer') {
+    window.clearTimeout(this.pauseTimer);
+    this.pauseTimer = window.setTimeout(() => this.resumeMatch(), PAUSE_MS);
+    this.set({ pause: { by, until: Date.now() + PAUSE_MS }, resumeAt: null });
+  }
+
+  private setResumed() {
+    window.clearTimeout(this.pauseTimer);
+    const resumeAt = Date.now() + RESUME_MS;
+    this.set({ pause: null, resumeAt });
+    window.setTimeout(() => this.state.resumeAt === resumeAt && this.set({ resumeAt: null }), RESUME_MS);
   }
 
   backToLobby() {
@@ -260,6 +305,7 @@ export class NetClient {
 
   private teardown() {
     window.clearInterval(this.pingTimer);
+    window.clearTimeout(this.pauseTimer);
     window.clearTimeout(this.retryTimer);
     this.closeRtc();
     if (this.ws) {
@@ -330,6 +376,11 @@ export class NetClient {
       case 'pong':
         this.set({ ping: Math.round(performance.now() - m.ts) });
         break;
+      case 'pause':
+        if (s.status !== 'playing') break;
+        if (m.on && !s.pause) this.setPaused('peer');
+        else if (!m.on && s.pause) this.setResumed();
+        break;
       case 'rematch':
         this.set({ rematch: { ...s.rematch, peer: m.on } });
         this.maybeRematch();
@@ -355,7 +406,8 @@ export class NetClient {
 
   private toLobby() {
     const me = { ...this.state.me, ready: false };
-    this.set({ status: 'lobby', countdownEnd: null, rematch: { me: false, peer: false }, me });
+    window.clearTimeout(this.pauseTimer);
+    this.set({ status: 'lobby', countdownEnd: null, rematch: { me: false, peer: false }, me, pause: null, resumeAt: null });
     this.sendWs({ t: 'info', p: me });
   }
 
@@ -379,7 +431,8 @@ export class NetClient {
 
   /** Start a match after the countdown. The host numbers matches, so both sides agree on the id. */
   private begin(hostCorner: 0 | 1, cfg: MatchCfg, id: number) {
-    this.set({ status: 'countdown', hostCorner, cfg, countdownEnd: Date.now() + COUNTDOWN_MS, rematch: { me: false, peer: false } });
+    window.clearTimeout(this.pauseTimer);
+    this.set({ status: 'countdown', hostCorner, cfg, countdownEnd: Date.now() + COUNTDOWN_MS, rematch: { me: false, peer: false }, pause: null, resumeAt: null });
     window.setTimeout(() => {
       if (this.state.status === 'countdown') this.set({ status: 'playing', countdownEnd: null, matchId: id });
     }, COUNTDOWN_MS);

@@ -37,6 +37,14 @@ export function PauseMenu({ session }: { session: GameSession }) {
   const toMenu = useGameStore((s) => s.toMenu);
   const [showSettings, setShowSettings] = useState(false);
   const context = useContextLine(session);
+  const ns = useNet();
+  const [, tick] = useState(0);
+  const onlinePause = !!session.net && !!ns.pause;
+  useEffect(() => {
+    if (!onlinePause) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 500);
+    return () => window.clearInterval(id);
+  }, [onlinePause]);
   useGamepadNav(paused ? () => (showSettings ? setShowSettings(false) : setPaused(false)) : undefined);
   useEffect(() => {
     if (!paused) setShowSettings(false);
@@ -51,8 +59,12 @@ export function PauseMenu({ session }: { session: GameSession }) {
   return (
     <MatchPanel label="Paused">
       <p className="context">{context}</p>
-      <h1 className="title">{showSettings ? 'Settings' : online ? 'Menu' : 'Paused'}</h1>
-      {online && !showSettings && <p className="caption">The match keeps running online.</p>}
+      <h1 className="title">{showSettings ? 'Settings' : 'Paused'}</h1>
+      {online && ns.pause && !showSettings && (
+        <p className="caption" role="status" data-testid="online-pause">
+          {ns.pause.by === 'me' ? 'You paused' : `${ns.peer?.nick || 'Your friend'} paused`} the match for both of you · resumes in {Math.max(0, Math.ceil((ns.pause.until - Date.now()) / 1000))} s
+        </p>
+      )}
       {hud && !session.training && !showSettings && (
         <p className="scoreline" aria-label={comp ? `Points ${hud.points[0]} to ${hud.points[1]}` : `Rounds ${hud.wins[0]} to ${hud.wins[1]}`}>
           <span className="corner-tag chung">{hud.shortNames[0]}</span>
@@ -77,7 +89,7 @@ export function PauseMenu({ session }: { session: GameSession }) {
           <MenuList
             label="Pause menu"
             items={[
-              { id: 'resume', label: online ? 'Back to the match' : 'Resume', onSelect: () => setPaused(false), testid: 'resume' },
+              { id: 'resume', label: 'Resume', onSelect: () => setPaused(false), testid: 'resume' },
               ...(online
                 ? []
                 : [
@@ -258,7 +270,6 @@ const KIND_LABEL: Record<(typeof KINDS)[number], string> = {
 function CompetitiveSummary({ session }: { session: GameSession }) {
   const rules = session.competitive!;
   const hist = rules.history;
-  const [a, b] = session.defs;
   const total = (i: 0 | 1, k: (typeof KINDS)[number]) => hist.reduce((s, h) => s + h.stats[i].scored[k], 0);
   const penalties = (i: 0 | 1) => hist.flatMap((h) => h.stats[i].gamjeomReasons);
   return (
@@ -268,10 +279,10 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
           <tr>
             <th scope="col">Round</th>
             <th scope="col">
-              <span className="corner-tag chung">{a.short}</span>
+              <span className="corner-tag chung">{session.shortName(0)}</span>
             </th>
             <th scope="col">
-              <span className="corner-tag hong">{b.short}</span>
+              <span className="corner-tag hong">{session.shortName(1)}</span>
             </th>
             <th scope="col" className="end">
               Winner
@@ -287,7 +298,7 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
               </td>
               <td className={h.winner === 0 ? 'won' : ''}>{h.stats[0].points}</td>
               <td className={h.winner === 1 ? 'won' : ''}>{h.stats[1].points}</td>
-              <td className="end">{h.winner === null ? 'Draw' : session.defs[h.winner].short}</td>
+              <td className="end">{h.winner === null ? 'Draw' : session.shortName(h.winner)}</td>
             </tr>
           ))}
         </tbody>
@@ -298,8 +309,8 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
           <thead>
             <tr>
               <th scope="col">Valid techniques</th>
-              <th scope="col">{a.short}</th>
-              <th scope="col">{b.short}</th>
+              <th scope="col">{session.shortName(0)}</th>
+              <th scope="col">{session.shortName(1)}</th>
             </tr>
           </thead>
           <tbody>
@@ -320,7 +331,7 @@ function CompetitiveSummary({ session }: { session: GameSession }) {
         {[0, 1].map((i) =>
           penalties(i as 0 | 1).length ? (
             <p key={i} className="caption">
-              {session.defs[i].short} gam-jeom: {penalties(i as 0 | 1).join(' · ')}
+              {session.shortName(i as 0 | 1)} gam-jeom: {penalties(i as 0 | 1).join(' · ')}
             </p>
           ) : null,
         )}

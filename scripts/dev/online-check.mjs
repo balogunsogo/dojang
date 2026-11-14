@@ -19,6 +19,16 @@ const open = async () => {
   // Small and low quality: two software-rendered WebGL pages share this machine.
   const ctx = await b.newContext({ viewport: { width: 900, height: 560 } });
   await ctx.addInitScript(() => localStorage.setItem('dojang.settings.v1', JSON.stringify({ quality: 'low', menuScene: false })));
+  // Count WebGL contexts created: browsers drop the oldest when too many exist (the game's own).
+  await ctx.addInitScript(() => {
+    window.__glContexts = 0;
+    const orig = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+      const r = orig.call(this, type, ...rest);
+      if (/webgl/.test(type) && r && !this.__counted) { this.__counted = true; window.__glContexts++; }
+      return r;
+    };
+  });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
@@ -57,6 +67,9 @@ check('both start the match after the countdown', true);
 const info = await Promise.all([host, guest].map((p) => p.evaluate(() => ({ me: window.__dojang.session.me, names: window.__dojang.session.defs.map((d) => d.id) }))));
 check('host is blue (0), guest is red (1); mirror match allowed', info[0].me === 0 && info[1].me === 1 && info[0].names.join() === 'jae,jae', JSON.stringify(info));
 
+const names = await Promise.all([host, guest].map((p) => p.evaluate(() => ({ calls: [window.__dojang.session.shortName(0), window.__dojang.session.shortName(1)], hud: [...document.querySelectorAll('.hud .short')].map((e) => e.textContent) }))));
+check('online: calls, HUD and tables use the players\' names, not the fighters\'', names.every((n) => n.calls.join() === 'Hosty,Guesty' && n.hud.join() === 'Hosty,Guesty'), JSON.stringify(names));
+
 // Fight a little: the host walks forward and kicks, the guest punches.
 const fps = await host.evaluate(() => new Promise((r) => { let n = 0; const t0 = performance.now(); const f = () => (++n, performance.now() - t0 < 1000 ? requestAnimationFrame(f) : r(n)); requestAnimationFrame(f); }));
 console.log(`(host renders at ~${fps} fps in this environment)`);
@@ -83,16 +96,43 @@ check('both peers simulate (frames advancing)', st[0].frame > 200 && st[1].frame
 check('host moved forward on both screens', st[0].z0 > -1.15 && Math.abs(st[0].z0 - st[1].z0) < 0.3, `${st[0].z0} vs ${st[1].z0}`);
 check('stamina spent by attacks agrees on both', Math.abs(st[0].st[0] - st[1].st[0]) <= 3 && st[0].st[0] < 100, JSON.stringify([st[0].st, st[1].st]));
 check('no desyncs', st[0].desync === 0 && st[1].desync === 0);
+const glNow = await Promise.all([host, guest].map((p) => p.evaluate(() => window.__glContexts)));
+check('no new WebGL contexts during the match (the game canvas is never evicted)', glNow.every((n) => n <= 2), JSON.stringify(glNow));
 const dot = await host.textContent('[data-testid=net-dot]');
 check('HUD connection dot shows ping', /\d+ ms/.test(dot ?? ''), dot ?? '');
 
-// Esc opens a menu but does not pause online.
-const f1 = await host.evaluate(() => window.__dojang.session.net.frame);
+// Pause is shared: Esc pauses both players; either can resume; it resumes on its own after 30 s.
+const frames = () => Promise.all([host, guest].map((p) => p.evaluate(() => window.__dojang.session.net.frame)));
 await host.keyboard.press('Escape');
+await guest.waitForSelector('[data-testid=online-pause]', { timeout: 5000 }).catch(() => {});
+const pauseText = await guest.textContent('[data-testid=online-pause]').catch(() => '');
+await host.waitForTimeout(500);
+const p0 = await frames();
 await host.waitForTimeout(2000);
-const [f2, paused] = await host.evaluate(() => [window.__dojang.session.net.frame, window.__dojang.session.paused]);
-check('Esc menu opens but does not pause the online match', paused && f2 > f1 + 10, `${f1} -> ${f2}`);
-await host.keyboard.press('Escape');
+const p1 = await frames();
+check('pause: Esc pauses both players (both show the pause menu, neither simulates)', !!(await host.$('[data-testid=online-pause]')) && /paused/.test(pauseText ?? '') && p1[0] === p0[0] && p1[1] === p0[1], `${pauseText} | host ${p0[0]}->${p1[0]}, guest ${p0[1]}->${p1[1]}`);
+check('pause: shows who paused and the auto-resume countdown', /Hosty paused/.test(pauseText ?? '') && /resumes in \d+ s/.test(pauseText ?? ''), pauseText ?? '');
+check('pause: no "waiting for opponent" countdown while paused', !(await host.$('[data-testid=net-waiting]')) && !(await guest.$('[data-testid=net-waiting]')));
+await guest.click('[data-testid=resume]');
+await host.waitForSelector('[data-testid=net-resuming]', { timeout: 5000 }).catch(() => {});
+const resumingBoth = !!(await host.$('[data-testid=net-resuming]')) && !!(await guest.$('[data-testid=net-resuming]'));
+const r0 = await frames();
+await host.waitForTimeout(1500);
+const r1 = await frames();
+check('resume: either player resumes; both count down "Resuming in 3" (still held)', resumingBoth && r1[0] === r0[0] && !(await host.$('[data-testid=online-pause]')), `host ${r0[0]}->${r1[0]}`);
+await host.waitForTimeout(3500);
+const r2 = await frames();
+check('resume: play continues on both after the countdown', r2[0] > r1[0] + 10 && r2[1] > r1[1] + 10, `host ${r1[0]}->${r2[0]}, guest ${r1[1]}->${r2[1]}`);
+// Auto-resume: pause and leave it.
+await guest.keyboard.press('Escape');
+await host.waitForSelector('[data-testid=online-pause]', { timeout: 5000 }).catch(() => {});
+await host.waitForTimeout(31000);
+const autoGone = !(await host.$('[data-testid=online-pause]')) && !(await guest.$('[data-testid=online-pause]'));
+await host.waitForTimeout(4000);
+const a1 = await frames();
+await host.waitForTimeout(1500);
+const a2 = await frames();
+check('pause: resumes on its own after 30 s, play continues', autoGone && a2[0] > a1[0] + 10 && a2[1] > a1[1] + 10, `host ${a1[0]}->${a2[0]}`);
 
 // Rematch: both agree, corners swap, and the new match runs and takes input.
 await Promise.all([host, guest].map((p) => p.evaluate(() => { window.__old = window.__dojang.session; window.__dojang.net.requestRematch(); })));

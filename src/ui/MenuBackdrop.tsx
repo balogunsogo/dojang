@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MenuStage, type MenuShot } from '../game/menu/MenuStage';
 import { resolveQuality } from '../game/render/quality';
+import { webglAvailable } from '../game/render/webgl';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
 
 const SHOT: Record<MenuPanel, MenuShot> = {
@@ -15,14 +16,6 @@ const SHOT: Record<MenuPanel, MenuShot> = {
   online: 'spar',
 };
 
-function canUseWebGL() {
-  try {
-    const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
-  } catch {
-    return false;
-  }
-}
 
 export const prefersReducedMotion = () => {
   try {
@@ -49,7 +42,7 @@ export function MenuBackdrop() {
   const belt = useGameStore((s) => s.progress.belt);
 
   useEffect(() => {
-    if (!enabled || !canvas.current || !canUseWebGL() || new URLSearchParams(location.search).has('nomenu3d')) return;
+    if (!enabled || !canvas.current || !webglAvailable() || new URLSearchParams(location.search).has('nomenu3d')) return;
     let s: MenuStage;
     try {
       const st = useGameStore.getState();
