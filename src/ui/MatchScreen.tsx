@@ -70,7 +70,8 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
         onPerf: (p) => useGameStore.getState().setPerf(p),
         onPauseToggle: () => {
           const s = useGameStore.getState();
-          if (s.hud?.phase !== 'match-over' && !s.trainingResult) s.setPaused(!s.paused);
+          if (s.paused) s.setPaused(false);
+          else s.requestPause();
         },
       },
     });

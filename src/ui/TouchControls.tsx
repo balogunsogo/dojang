@@ -30,7 +30,7 @@ export function TouchControls({ input }: { input: InputManager }) {
   const opacity = useGameStore((s) => s.settings.controlOpacity);
   const scale = useGameStore((s) => s.settings.controlScale);
   const lefty = useGameStore((s) => s.settings.leftHanded);
-  const setPaused = useGameStore((s) => s.setPaused);
+  const requestPause = useGameStore((s) => s.requestPause);
   const stick = useRef<{ id: number; ox: number; oy: number } | null>(null);
   const cam = useRef<{ id: number; x: number; y: number } | null>(null);
   const baseRef = useRef<HTMLDivElement>(null);
@@ -161,7 +161,7 @@ export function TouchControls({ input }: { input: InputManager }) {
           <TapButton cls="b-switch" label="⇄" aria="Switch stance" onTap={() => input.press('switch')} />
         </div>
       )}
-      <button className="tbtn t-pause" aria-label="Pause" onPointerDown={() => setPaused(true)}>
+      <button className="tbtn t-pause" aria-label="Pause" onPointerDown={() => requestPause()}>
         ❚❚
       </button>
       <button className="tbtn t-lock" aria-label="Lock-on" onPointerDown={() => input.press('lock')}>

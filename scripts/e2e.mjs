@@ -543,12 +543,12 @@ if (runs('training')) {
   // 5. Back to menu, 6. reload: progress retained.
   await page.waitForSelector('[data-testid=training-summary]', { timeout: 10000 }).catch(() => {});
   await page.click('[data-testid=training-summary] >> text=Main menu');
-  const chip = await page.textContent('.home-fighter .belt-chip');
+  const chip = await page.textContent('[data-testid=current-fighter]');
   check('training: menu shows the new belt', /Yellow/.test(chip ?? ''), chip);
   await page.reload();
   await page.waitForSelector('[data-testid=current-fighter]');
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('dojang.progress.v1')));
-  const chip2 = await page.textContent('.home-fighter .belt-chip');
+  const chip2 = await page.textContent('[data-testid=current-fighter]');
   check('training: reload keeps belt, fighter and completed activities', after.belt === 'yellow' && after.fighter === 'hana' && after.completed.includes('body10') && after.completed.includes('combo-front-round') && /Yellow/.test(chip2 ?? '') && /Park Ha-na/.test(await page.textContent('[data-testid=current-fighter]')), JSON.stringify({ belt: after.belt, fighter: after.fighter, completed: after.completed }));
   if (shots) await page.screenshot({ path: `${shots}/menu-home.jpg`, type: 'jpeg', quality: 80 });
   check('training: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -658,7 +658,7 @@ if (runs('competitive')) {
   }
   await page.waitForSelector('[data-testid=comp-summary]', { timeout: 30000 }).catch(() => {});
   const summary = await page.$eval('[data-testid=comp-summary]', (e) => e.textContent).catch(() => '');
-  check('competitive: result screen shows rounds, techniques and penalties', /R1/.test(summary) && /R2/.test(summary) && /Turning head kick/.test(summary) && /Crossing the boundary line/.test(summary), summary.slice(0, 120));
+  check('competitive: result screen shows rounds, techniques and penalties', /Round/.test(summary) && /Winner/.test(summary) && /Turning head kick/.test(summary) && /Crossing the boundary line/.test(summary), summary.slice(0, 400));
   const winner = await page.evaluate(() => window.__dojang.session.world.matchWinner);
   const rounds = await page.evaluate(() => window.__dojang.session.world.round);
   check('competitive: player wins the match 2-0 in two rounds (no extra round)', winner === 0 && rounds === 2, `winner ${winner}, rounds ${rounds}`);

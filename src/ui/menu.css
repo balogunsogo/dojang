@@ -330,7 +330,10 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
   .home-menu li:has(.t2) { flex: 0 0 auto; }
   .home-menu li:has(.t2) { margin-top: var(--s2); }
   .home-menu .menu-item.t2 .desc { display: none; }
-  .home-notes { display: none; }
+  /* Notes (the play-without-browser-bars hint, save warnings) sit bottom right, compact. */
+  .home-notes { position: absolute; right: calc(var(--edge) + var(--sar)); bottom: calc(var(--s4) + var(--sab)); width: min(300px, 38vw); }
+  .home-notes .pwa-hint { font-size: 0.8125rem; line-height: 1.125rem; align-items: flex-start; }
+  .home-notes .pwa-hint .btn-quiet { min-height: 32px; padding: 0 var(--s2); }
   .home-foot { grid-column: 2; grid-row: 1; align-self: start; }
   .home-foot .hints { display: none; }
   .screen { padding-top: calc(var(--s4) + var(--sat)); padding-bottom: calc(var(--s4) + var(--sab)); width: min(100%, calc(var(--ui-col) + 2 * var(--edge))); }
