@@ -94,6 +94,21 @@ const [f2, paused] = await host.evaluate(() => [window.__dojang.session.net.fram
 check('Esc menu opens but does not pause the online match', paused && f2 > f1 + 10, `${f1} -> ${f2}`);
 await host.keyboard.press('Escape');
 
+// Rematch: both agree, corners swap, and the new match runs and takes input.
+await Promise.all([host, guest].map((p) => p.evaluate(() => { window.__old = window.__dojang.session; window.__dojang.net.requestRematch(); })));
+await Promise.all([host, guest].map((p) => p.waitForFunction(() => window.__dojang?.session && window.__dojang.session !== window.__old && window.__dojang.session.ready, null, { timeout: 60000 })));
+await host.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 }).catch(() => {});
+const re0 = await Promise.all([host, guest].map((p) => p.evaluate(() => ({ me: window.__dojang.session.me, frame: window.__dojang.session.net.frame, z: window.__dojang.session.world.fighters.map((f) => +f.z.toFixed(2)) }))));
+await host.keyboard.down('KeyW');
+await host.waitForTimeout(1500);
+await host.keyboard.up('KeyW');
+await host.waitForTimeout(1500);
+const re1 = await Promise.all([host, guest].map((p) => p.evaluate(() => ({ frame: window.__dojang.session.net.frame, z: window.__dojang.session.world.fighters.map((f) => +f.z.toFixed(2)) }))));
+check('rematch: corners swap (host now red)', re0[0].me === 1 && re0[1].me === 0, JSON.stringify(re0.map((r) => r.me)));
+check('rematch: the new match keeps simulating on both screens (not frozen)', re1[0].frame > re0[0].frame + 30 && re1[1].frame > re0[1].frame + 30, `host ${re0[0].frame}->${re1[0].frame}, guest ${re0[1].frame}->${re1[1].frame}`);
+const hz = (r) => r.z[1]; // host is fighter 1 after the swap
+check('rematch: host controls work and both screens agree', Math.abs(hz(re1[0]) - hz(re0[0])) > 0.2 && Math.abs(hz(re1[0]) - hz(re1[1])) < 0.3, `host fighter z ${hz(re0[0])} -> ${hz(re1[0])} (guest sees ${hz(re1[1])})`);
+
 // Guest disappears: host sees the waiting countdown.
 await guest.context().setOffline(true);
 await guest.evaluate(() => window.__dojang.session.dispose());

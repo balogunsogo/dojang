@@ -17,7 +17,7 @@ import { OnlineStatus } from './OnlineStatus';
 
 declare global {
   interface Window {
-    __dojang?: { session: GameSession; input: InputManager };
+    __dojang?: { session: GameSession; input: InputManager; net?: typeof net };
   }
 }
 
@@ -83,7 +83,7 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
       .then(() => {
         if (!alive) return;
         st.setLoading(false);
-        window.__dojang = { session, input };
+        window.__dojang = { session, input, net };
         onReady(session);
       })
       .catch((e: unknown) => st.setLoading(false, String(e)));
@@ -107,6 +107,18 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
 
   useFrame((_, dt) => sessionRef.current?.frame(dt));
   return null;
+}
+
+/**
+ * A canvas whose WebGL context is lost paints solid white until the context
+ * comes back. Mobile browsers drop contexts under memory or GPU pressure, or
+ * briefly on app switches, which showed as white flashes mid-match. Hide the
+ * canvas meanwhile so the dark match background shows; Three.js restores the
+ * context and the next frame draws as normal.
+ */
+function hideWhileContextLost(canvas: HTMLCanvasElement) {
+  canvas.addEventListener('webglcontextlost', () => (canvas.style.visibility = 'hidden'));
+  canvas.addEventListener('webglcontextrestored', () => (canvas.style.visibility = ''));
 }
 
 export function MatchScreen() {
@@ -167,6 +179,7 @@ export function MatchScreen() {
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.05;
+          hideWhileContextLost(gl.domElement);
         }}
       >
         <color attach="background" args={['#1a1510']} />

@@ -66,9 +66,10 @@ type Msg =
   | { t: 'error'; code: string }
   | { t: 'info'; p: PeerInfo }
   | { t: 'cfg'; c: MatchCfg }
-  | { t: 'start'; hostCorner: 0 | 1; c: MatchCfg }
+  | { t: 'start'; hostCorner: 0 | 1; c: MatchCfg; id: number }
   | { t: 'rtc'; sdp?: RTCSessionDescriptionInit; cand?: RTCIceCandidateInit }
-  | { t: 'g'; m: NetMsg }
+  /** Game traffic, tagged with the match it belongs to. */
+  | { t: 'g'; m: NetMsg; id: number }
   | { t: 'ping'; ts: number }
   | { t: 'pong'; ts: number }
   | { t: 'rematch'; on: boolean }
@@ -119,7 +120,7 @@ export class NetClient {
   private closedByUs = false;
   private droppedAt = 0;
   /** The running match's link (GameSession sets onMessage). */
-  readonly link: NetLink = { send: (m) => this.sendFast({ t: 'g', m }), onMessage: null };
+  readonly link: NetLink = { send: (m) => this.sendFast({ t: 'g', m, id: this.state.matchId }), onMessage: null };
 
   constructor() {
     this.state = this.fresh();
@@ -312,13 +313,16 @@ export class NetClient {
         if (s.role === 'guest') this.set({ cfg: m.c });
         break;
       case 'start':
-        if (s.role === 'guest') this.begin(m.hostCorner, m.c);
+        if (s.role === 'guest') this.begin(m.hostCorner, m.c, m.id);
         break;
       case 'rtc':
         void this.onRtc(m);
         break;
       case 'g':
-        this.link.onMessage?.(m.m);
+        // Only the current match's traffic: on a rematch the previous match's
+        // last messages (still in flight, or from a peer that has not switched
+        // yet) would otherwise reach the new rollback and stall it.
+        if (m.id === s.matchId) this.link.onMessage?.(m.m);
         break;
       case 'ping':
         this.sendFast({ t: 'pong', ts: m.ts });
@@ -359,22 +363,25 @@ export class NetClient {
   private maybeStart() {
     const s = this.state;
     if (s.role !== 'host' || s.status !== 'lobby' || !s.peerPresent || !s.me.ready || !s.peer?.ready) return;
-    this.sendWs({ t: 'start', hostCorner: s.hostCorner, c: s.cfg });
-    this.begin(s.hostCorner, s.cfg);
+    const id = s.matchId + 1;
+    this.sendWs({ t: 'start', hostCorner: s.hostCorner, c: s.cfg, id });
+    this.begin(s.hostCorner, s.cfg, id);
   }
 
   private maybeRematch() {
     const s = this.state;
     if (s.role !== 'host' || !s.rematch.me || !s.rematch.peer) return;
     const hostCorner = (1 - s.hostCorner) as 0 | 1;
-    this.sendWs({ t: 'start', hostCorner, c: s.cfg });
-    this.begin(hostCorner, s.cfg);
+    const id = s.matchId + 1;
+    this.sendWs({ t: 'start', hostCorner, c: s.cfg, id });
+    this.begin(hostCorner, s.cfg, id);
   }
 
-  private begin(hostCorner: 0 | 1, cfg: MatchCfg) {
+  /** Start a match after the countdown. The host numbers matches, so both sides agree on the id. */
+  private begin(hostCorner: 0 | 1, cfg: MatchCfg, id: number) {
     this.set({ status: 'countdown', hostCorner, cfg, countdownEnd: Date.now() + COUNTDOWN_MS, rematch: { me: false, peer: false } });
     window.setTimeout(() => {
-      if (this.state.status === 'countdown') this.set({ status: 'playing', countdownEnd: null, matchId: this.state.matchId + 1 });
+      if (this.state.status === 'countdown') this.set({ status: 'playing', countdownEnd: null, matchId: id });
     }, COUNTDOWN_MS);
   }
 

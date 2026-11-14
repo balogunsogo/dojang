@@ -269,7 +269,9 @@ export class MenuStage {
       (this.dust.material as THREE.Material).dispose();
     }
     this.renderer.dispose();
-    // Free the GL context now so the match canvas never competes with it.
+    // Free the GL context now so the match canvas never competes with it. A
+    // lost context paints the canvas white, so hide it first (no white frame).
+    this.renderer.domElement.style.visibility = 'hidden';
     this.renderer.forceContextLoss();
   }
 }
