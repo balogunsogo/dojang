@@ -183,6 +183,8 @@ interface GameStore {
   resetProgress(): void;
   toMenu(panel?: MenuPanel): void;
   setPaused(p: boolean): void;
+  /** Pause if there is a match in progress (not over, no training summary showing). */
+  requestPause(): void;
   setHud(h: HudState): void;
   pushToast(t: Omit<Toast, 'id'>, ms?: number): void;
   setPerf(p: PerfSnapshot): void;
@@ -236,6 +238,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   clearPromotion: () => set({ promotion: null }),
   resetProgress: () => commitProgress({ ...defaultProgress(), fighter: get().progress.fighter }),
   setPaused: (paused) => set({ paused }),
+  requestPause: () => {
+    const s = get();
+    if (s.screen === 'match' && s.hud && s.hud.phase !== 'match-over' && !s.trainingResult) set({ paused: true });
+  },
   setHud: (hud) => set({ hud }),
   pushToast: (t, ms = 1100) => {
     const id = toastId++;

@@ -35,6 +35,19 @@ const open = async () => {
   return p;
 };
 
+// A mistyped room code gets a clear message, not "can't reach the server".
+{
+  const p = await open();
+  await p.goto(base + q);
+  await p.click('[data-testid=mode-friend]');
+  await p.click('[data-testid=friend-where-online]');
+  await p.fill('[data-testid=join-code]', 'AB');
+  await p.click('[data-testid=join-room]');
+  const msg = await p.textContent('[data-testid=net-error]').catch(() => '');
+  check('join: a too-short room code explains the code format', /Room codes are/.test(msg ?? ''), msg ?? '');
+  await p.context().close();
+}
+
 const host = await open();
 await host.goto(base + q);
 await host.click('[data-testid=mode-friend]');

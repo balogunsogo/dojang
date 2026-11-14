@@ -75,7 +75,7 @@ export function App() {
       const s = useGameStore.getState();
       if (document.hidden) {
         audio.suspend();
-        if (s.screen === 'match' && s.hud && s.hud.phase !== 'match-over') s.setPaused(true);
+        s.requestPause();
       } else audio.resume();
     };
     document.addEventListener('visibilitychange', onVis);

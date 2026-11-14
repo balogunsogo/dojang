@@ -83,6 +83,7 @@ type Msg =
 
 export const ERRORS: Record<string, string> = {
   'not-found': 'That room doesn’t exist (or has closed). Ask your friend for a new link.',
+  'bad-code': 'Room codes are 6 letters and numbers, like K7Q2PX. Check the code and try again.',
   full: 'Someone else already joined that room.',
   expired: 'That invite has expired. Ask your friend for a new link.',
   version: 'You and your friend are on different versions of DOJANG. Both of you, please refresh the page.',
@@ -177,7 +178,14 @@ export class NetClient {
   }
 
   join(code: string, me: PeerInfo) {
-    this.open('guest', code.toUpperCase().replace(/[^A-Z0-9]/g, ''), me, this.state.cfg);
+    const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // Room codes are 4-8 characters; anything else cannot be a room (the server only routes those).
+    if (clean.length < 4 || clean.length > 8) {
+      this.teardown();
+      this.set({ ...this.fresh(), status: 'error', error: ERRORS['bad-code'] });
+      return;
+    }
+    this.open('guest', clean, me, this.state.cfg);
   }
 
   inviteLink() {

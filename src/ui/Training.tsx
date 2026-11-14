@@ -216,6 +216,8 @@ export function TrainingSummary({ session }: { session: GameSession }) {
             testid="retry-activity"
             onClick={() => {
               clearPromotion();
+              // The summary shows while a result is stored: clear it, or it stays over the new attempt.
+              useGameStore.setState({ trainingResult: null, trainingHud: null });
               session.rematch();
             }}
           >
