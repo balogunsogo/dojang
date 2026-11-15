@@ -37,6 +37,9 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
   background: radial-gradient(ellipse 42% 60% at 74% 34%, rgb(255 214 150 / .22), transparent 70%), linear-gradient(180deg, #2a1d13 0%, #1a120b 55%, var(--ink) 100%); }
 .menu-backdrop .stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 900ms ease; }
 .menu-backdrop.live .stage { opacity: 1; }
+/* Fighter swap: the stage dims to ink .55 in 120 ms, swaps, then fades back in 180 ms. */
+.menu-backdrop .stage-dim { position: absolute; inset: 0; background: var(--ink); opacity: 0; transition: opacity 180ms var(--ease); }
+.menu-backdrop .stage-dim.on { opacity: .55; transition-duration: 120ms; }
 .scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: var(--scrim); }
 /* Sub-screens carry denser copy: same scrim shape, held darker under the column (≥ 4.5:1 over bright windows). */
 .menu-root.at-screen .scrim { background: linear-gradient(90deg, rgb(21 18 15 / .9) 0%, rgb(21 18 15 / .78) 34%, rgb(21 18 15 / 0) 60%); }
@@ -288,6 +291,42 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 .train-title .kind { letter-spacing: 0; text-transform: none; color: var(--muted); font-size: 11px; }
 .train-goal { font-variant-numeric: tabular-nums; font-weight: 600; }
 
+/* ── Choose fighter (Phase 10): compact roster, detail block ───────── */
+.menu-root.at-screen:has(.fighter-select) .scrim { background: linear-gradient(90deg, rgb(21 18 15 / .9) 0%, rgb(21 18 15 / .76) 36%, rgb(21 18 15 / 0) 56%); }
+.fighter-select .roster { gap: 2px; margin-top: var(--s5); }
+.option-row.compact { grid-template-columns: 1fr auto auto; gap: var(--s3); min-height: 48px; padding: 0 var(--s4); transition: background var(--t-fast) var(--ease); }
+.option-row.compact:hover { background: none; }
+.option-row.compact.on { background: var(--surface); }
+.option-row.compact .name { font-size: 1.0625rem; line-height: 1.375rem; display: flex; align-items: baseline; gap: var(--s2); white-space: nowrap; transition: color var(--t-fast) var(--ease); }
+.option-row.compact .name .ko { font-weight: 400; color: var(--muted); }
+@media (hover: hover) { .option-row.compact:hover .name { color: var(--fg); } .option-row.compact:hover::before { opacity: 1; } }
+.option-row.compact .aside { font-size: 0.8125rem; line-height: 1.125rem; color: var(--muted); }
+.option-row.compact::before { content: ''; position: absolute; left: -28px; top: 50%; width: 14px; height: 2px; margin-top: -1px; background: var(--brass); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.option-row.compact:has(input:focus-visible)::before { opacity: 1; }
+.option-row.compact:has(input:focus-visible) { outline: 2px solid var(--brass); outline-offset: 4px; }
+.option-row.compact .radio { transition: border-color var(--t-fast) var(--ease); }
+.option-row.compact.on .radio { border-width: 2px; }
+.option-row.compact.on .radio::after { inset: 3px; }
+.fighter-detail { margin-top: 28px; }
+.fighter-detail .fade { animation: detail-in var(--t-base) var(--ease) var(--t-fast) both; }
+@keyframes detail-in { from { opacity: 0; } to { opacity: 1; } }
+.fighter-detail .blurb { margin: 0; font-size: 1rem; line-height: 1.5rem; color: var(--fg); max-width: 52ch; }
+.fighter-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s6); margin: var(--s5) 0 0; }
+.fighter-stats div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fighter-stats dt { font-size: 0.8125rem; line-height: 1.125rem; font-weight: 600; color: var(--muted); }
+.fighter-stats dd { margin: 0; font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.fighter-stats .track { display: block; height: 2px; margin-top: var(--s1); background: rgb(239 230 216 / .16); }
+.fighter-stats .track i { display: block; height: 100%; background: var(--fg); transition: width var(--t-base) var(--ease); }
+.fighter-stats .stat-belt { display: none; }
+.belt-line { display: flex; align-items: center; gap: var(--s3); margin: var(--s5) 0 0; font-size: 0.875rem; line-height: 1.25rem; color: var(--muted); }
+.fighter-select .confirm .btn-primary { transition: transform 80ms var(--ease), background var(--t-fast); }
+.fighter-select .confirm.pressed .btn-primary { transform: scale(.98); }
+.screen-hints { text-shadow: 0 1px 3px rgb(21 18 15 / .9); position: absolute; z-index: 2; right: calc(var(--edge) + var(--sar)); bottom: calc(var(--s7) + var(--sab)); }
+@media (prefers-reduced-motion: reduce) {
+  .fighter-detail .fade { animation: detail-in var(--t-fast) linear both; }
+  .fighter-stats .track i { transition: none; }
+}
+
 /* ── Phone portrait: scrim from the bottom, stacked menu ─────────── */
 @media (max-width: 599px) and (orientation: portrait) {
   :root { --edge: 24px; --ui-col: calc(100% - 2 * var(--edge)); }
@@ -309,6 +348,20 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
   .settings { grid-template-columns: 1fr; }
   .settings .settings-col + .settings-col .group-label { margin-top: var(--s5); }
   .panel-col { width: 100%; }
+  /* Choose fighter: the hall stays visible above; the screen starts ~31% down. */
+  .menu-root.at-screen:has(.fighter-select) .scrim { background: linear-gradient(180deg, rgb(21 18 15 / .55) 0%, rgb(21 18 15 / 0) 14%), linear-gradient(0deg, rgb(21 18 15 / .96) 0%, rgb(21 18 15 / .9) 58%, rgb(21 18 15 / 0) 72%); }
+  .screen.fighter-select { padding-top: calc(31vh + var(--sat)); padding-bottom: calc(28px + var(--sab)); }
+  .fighter-select .screen-head .btn-back { position: absolute; top: calc(36px + var(--sat)); left: calc(var(--edge) + var(--sal)); }
+  .fighter-select .screen-head .title { margin-bottom: var(--s3); }
+  .fighter-select .intro { display: none; }
+  .fighter-select .roster { margin-top: 0; }
+  .option-row.compact { min-height: 46px; }
+  .option-row.compact .radio { width: 16px; height: 16px; }
+  .option-row.compact.on .radio::after { inset: 2px; }
+  .option-row.compact::before { left: -18px; width: 10px; }
+  .fighter-detail { margin-top: var(--s4); }
+  .fighter-detail .blurb { font-size: 0.875rem; line-height: 1.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fighter-select .screen-foot { padding-top: var(--s4); }
 }
 
 /* ── Phone landscape menus: two columns, wordmark 40 ─────────────── */
@@ -395,3 +448,54 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 
 /* Controller button glyphs in hints (✕ ○ □ △ on PlayStation). */
 kbd.pad { font-family: var(--font-ui); letter-spacing: 0; }
+
+/* ── Choose fighter, phone landscape: 2 x 3 name grid, inline stats ── */
+@media (max-height: 500px) and (orientation: landscape) {
+  .menu-root.at-screen:has(.fighter-select) .scrim { background: linear-gradient(90deg, rgb(21 18 15 / .92) 0%, rgb(21 18 15 / .82) 44%, rgb(21 18 15 / 0) 66%); }
+  .screen.fighter-select { width: min(100%, calc(404px + 2 * var(--edge) + var(--sal))); padding-bottom: calc(var(--s4) + var(--sab)); }
+  .fighter-select .screen-head { display: flex; align-items: center; gap: var(--s2); height: 44px; margin-left: -10px; }
+  .fighter-select .screen-head .btn-back { width: 44px; min-height: 44px; justify-content: center; font-size: 1.25rem; }
+  .fighter-select .screen-head .btn-back .lbl { display: none; }
+  .fighter-select .screen-head .title { margin: 0; font-size: 1.625rem; line-height: 2rem; }
+  .fighter-select .intro { display: none; }
+  .fighter-select .screen-body { overflow: hidden; }
+  .fighter-select .roster { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 44px); grid-auto-flow: column; gap: 2px var(--s2); margin-top: var(--s2); }
+  .option-row.compact { min-height: 44px; margin: 0; padding: 0 var(--s3); }
+  .option-row.compact .name { font-size: 0.9375rem; }
+  .option-row.compact .ko, .option-row.compact .aside { display: none; }
+  .option-row.compact .radio { width: 16px; height: 16px; }
+  .option-row.compact.on .radio::after { inset: 2px; }
+  .option-row.compact::before { display: none; }
+  .option-row.compact:has(input:focus-visible) { outline-offset: 0; }
+  .fighter-detail { margin-top: var(--s3); }
+  .fighter-detail .blurb { font-size: 0.8125rem; line-height: 1.125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fighter-select .screen-foot { padding-top: var(--s3); }
+  .screen-hints { display: none; }
+}
+/* Phones (both orientations): one stats line with the belt marker. */
+@media (max-height: 500px) and (orientation: landscape), (max-width: 599px) and (orientation: portrait) {
+  .fighter-stats { display: flex; gap: 0; margin: var(--s1) 0 0; font-size: 0.8125rem; line-height: 1.125rem; }
+  .fighter-stats div { flex-direction: row; gap: 4px; }
+  .fighter-stats div + div::before { content: '·'; margin: 0 6px; color: var(--muted); }
+  .fighter-stats dt { font-size: inherit; font-weight: 400; }
+  .fighter-stats dd { font-size: inherit; line-height: inherit; }
+  .fighter-stats .track { display: none; }
+  .belt-line { display: none; }
+  .fighter-stats .stat-belt { display: flex; align-items: center; margin-left: var(--s3); }
+  .fighter-stats .stat-belt::before { content: none; }
+  .fighter-select .btn-primary { min-height: 48px; }
+}
+@media (max-width: 599px) and (orientation: portrait) {
+  .fighter-select .btn-primary { min-height: 56px; }
+  .fighter-detail .blurb { font-size: 0.875rem; line-height: 1.25rem; }
+  .fighter-stats { font-size: 0.875rem; line-height: 1.25rem; }
+}
+
+/* ── Couch / online fighter pick: 2 x 3 name rows, column-first ───── */
+.fighter-pick { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 44px); grid-auto-flow: column; gap: 2px var(--s2); }
+.fighter-pick .option-row.compact { min-height: 44px; margin: 0; padding: 0 var(--s3); }
+.fighter-pick .option-row.compact .name { font-size: 0.9375rem; }
+.fighter-pick .option-row.compact .radio { width: 16px; height: 16px; }
+.fighter-pick .option-row.compact.on .radio::after { inset: 2px; }
+.fighter-pick .option-row.compact::before { display: none; }
+.fighter-pick .option-row.compact:has(input:focus-visible) { outline-offset: 0; }

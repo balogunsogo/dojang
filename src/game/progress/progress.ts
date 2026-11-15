@@ -1,6 +1,6 @@
 import type { Difficulty } from '../ai/AIController';
 import type { AttackKind } from '../input/actions';
-import type { CharacterId } from '../render/characterFactory';
+import { type CharacterId, isCharacterId } from '../render/characterFactory';
 
 /**
  * Local player progress: selected fighter, belt, completed challenges,
@@ -63,7 +63,8 @@ export function migrate(raw: unknown): Progress {
   const p = defaultProgress();
   if (!raw || typeof raw !== 'object') return p;
   const r = raw as Record<string, unknown>;
-  if (r.fighter === 'jae' || r.fighter === 'hana') p.fighter = r.fighter;
+  // Any fighter this build knows; an unknown id (newer or corrupt save) falls back to the default.
+  if (isCharacterId(r.fighter)) p.fighter = r.fighter;
   if (BELT_ORDER.includes(r.belt as Belt)) p.belt = r.belt as Belt;
   if (Array.isArray(r.completed)) p.completed = r.completed.filter((x): x is string => typeof x === 'string');
   if (r.records && typeof r.records === 'object') {

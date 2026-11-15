@@ -17,7 +17,7 @@ const errors = [];
 p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '?nomenu3d');
 await p.click('[data-testid=mode-friend]');
-await p.click('[data-testid=p2-fighter-jae]');
+await p.click('[data-testid=p2-fighter-sofia]');
 await p.click('[data-testid=start-couch]');
 await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 60000 });
 await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
@@ -30,7 +30,7 @@ const hold = async (key, ms = 1200) => {
   await p.waitForTimeout(200);
 };
 const names = await p.evaluate(() => [window.__dojang.session.defs.map((d) => d.id).join(), document.querySelector('.hud-top')?.textContent ?? '']);
-check('couch match starts with the chosen fighters (mirror allowed)', names[0] === 'jae,jae', names[0]);
+check('couch match starts with the chosen fighters (P2 picks Sofia from the 2 x 3 grid)', names[0] === 'jae,sofia', names[0]);
 check('HUD shows P1 / P2 names', names[1].includes('P1') && names[1].includes('P2'), names[1].slice(0, 80));
 const a = await pos();
 await hold('KeyW');

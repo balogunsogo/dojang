@@ -10,7 +10,7 @@ import type { InputManager } from './input/InputManager';
 import { approachAngle, wrapAngle } from './math';
 import { type NetMsg, Rollback } from './netplay/Rollback';
 import { PerfMonitor } from './perf/PerfMonitor';
-import { type BeltColor, CHARACTERS, type CharacterDef, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
+import { type BeltColor, CHARACTERS, nextFighter, type CharacterDef, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
 import { buildDojang, type DojangHandle } from './render/Dojang';
 import { Effects } from './render/Effects';
 import { DynamicResolution, type QualityProfile } from './render/quality';
@@ -142,7 +142,8 @@ export class GameSession {
     this.o = o;
     this.me = o.me ?? 0;
     const pc = o.playerCharacter ?? 'jae';
-    const ids = o.characters ?? [pc, pc === 'jae' ? 'hana' : 'jae'];
+    // Default opponent: the next fighter in roster order (any of the six can be either corner).
+    const ids = o.characters ?? [pc, nextFighter(pc)];
     this.defs = [CHARACTERS[ids[0]], CHARACTERS[ids[1]]];
     const rules: Ruleset =
       o.mode === 'competitive'

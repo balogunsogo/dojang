@@ -5,7 +5,7 @@ import { DT } from '../config';
 import { type AttackKind, emptyIntent, type FighterIntent } from '../input/actions';
 import { createRng } from '../math';
 import type { Belt } from '../progress/progress';
-import { type BeltColor, CHARACTERS, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from '../render/characterFactory';
+import { type BeltColor, CHARACTERS, type CharacterId, nextFighter, ROSTER, type CharacterInstance, createCharacter, loadFighterAsset } from '../render/characterFactory';
 import { buildDojang, type DojangHandle } from '../render/Dojang';
 import type { QualityProfile } from '../render/quality';
 import { TrainingRules } from '../training/TrainingRules';
@@ -27,10 +27,19 @@ const SHOTS: Record<MenuShot, Shot> = {
   home: { pos: v(-5.4, 0.95, -0.9), target: v(0, 1.18, 0.1), fov: 36 },
   spar: { pos: v(-3.6, 0.6, -4.4), target: v(0.3, 1.25, 0.6), fov: 38 },
   training: { pos: v(2.3, 1.45, 1.6), target: v(-1.4, 1.05, -3.4), fov: 42 },
-  fighter: { pos: v(-2.1, 1.25, 0.2), target: v(0, 1.0, -1.3), fov: 34 },
+  // Head to shin, face never cropped (Phase 10).
+  fighter: { pos: v(-2.9, 1.32, 0.35), target: v(0, 1.1, -1.3), fov: 34 },
   progress: { pos: v(-4.2, 1.65, 1.9), target: v(-6.9, 1.55, -0.6), fov: 40 },
   settings: { pos: v(4.6, 3.1, 4.4), target: v(0, 0.9, 0), fov: 44 },
 };
+
+/** Cached fighter instances kept at most (six bare-head previews plus the headgear-on pair and a little slack). */
+const CACHE_MAX = 10;
+
+interface Cached {
+  inst: CharacterInstance;
+  anim: FighterAnimator;
+}
 
 const SHADOW_KICKS: AttackKind[] = ['round', 'leadRound', 'front', 'side', 'punch', 'leadFront'];
 
@@ -53,9 +62,19 @@ export class MenuStage {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 40);
   private readonly world = new CombatWorld(new TrainingRules(), [CHARACTERS.jae.stats, CHARACTERS.hana.stats]);
+  /** Debug and checks: how many fighter instances are built. */
+  get cachedInstances() {
+    return this.cache.size;
+  }
   private env: DojangHandle | null = null;
-  private chars: CharacterInstance[] = [];
-  private anims: FighterAnimator[] = [];
+  /** Fighter instances by id + headgear + corner + belt: built once, then shown or hidden (never rebuilt on selection). */
+  private readonly cache = new Map<string, Cached>();
+  /** The two fighters on the mats (player, opponent). */
+  private active: [Cached | null, Cached | null] = [null, null];
+  private shotName: MenuShot = 'home';
+  /** Soft key on the selected fighter's face, fighter shot only (intensity 0 elsewhere: no shader recompiles). */
+  private faceLight: THREE.SpotLight | null = null;
+  private prebuild: CharacterId[] = [];
   private dust: THREE.Points | null = null;
   private dustVel: Float32Array | null = null;
   private shot: Shot = SHOTS.home;
@@ -104,33 +123,102 @@ export class MenuStage {
     const rim = new THREE.PointLight('#ffb070', 6, 9, 1.6);
     rim.position.set(3.5, 2.4, 0.4);
     this.env.group.add(rim);
-    this.buildFighters();
+    // Face light for the fighter shot (deep skin tones need it). Always in the
+    // scene so toggling it never changes the light count (that would recompile shaders).
+    const fl = new THREE.SpotLight('#ffe2bf', 0, 6, 0.5, 0.8, 1.5);
+    fl.position.set(-1.6, 2.1, 0.4);
+    fl.target.position.set(0, 1.55, -1.3);
+    this.scene.add(fl, fl.target);
+    this.faceLight = fl;
+    this.showFighters();
     this.buildDust();
   }
 
-  private buildFighters() {
-    if (!this.gltf) return;
-    for (const a of this.anims) a.dispose();
-    for (const c of this.chars) {
-      c.group.removeFromParent();
-      c.dispose();
+  /** A fighter instance from the cache, built on first use. */
+  private instance(id: CharacterId, corner: 'chung' | 'hong', belt: BeltColor, headgear: boolean): Cached {
+    const key = `${id}:${corner}:${belt}:${headgear ? 'on' : 'off'}`;
+    let c = this.cache.get(key);
+    if (c) {
+      // Most recently used goes last (eviction takes the oldest).
+      this.cache.delete(key);
+      this.cache.set(key, c);
+      return c;
     }
-    this.chars = [];
-    this.anims = [];
+    const inst = createCharacter(this.gltf!, CHARACTERS[id], corner, belt, { headgear });
+    inst.group.visible = false;
+    this.scene.add(inst.group);
+    c = { inst, anim: new FighterAnimator(inst.group, inst.model, inst.clips, corner === 'chung' ? 7 : 8, { floorProbe: false }) };
+    this.cache.set(key, c);
+    // Bounded: drop the least recently used hidden instance.
+    while (this.cache.size > CACHE_MAX) {
+      const [oldKey, old] = [...this.cache].find(([, v]) => v !== this.active[0] && v !== this.active[1] && v !== c) ?? [];
+      if (!oldKey || !old) break;
+      this.cache.delete(oldKey);
+      this.drop(old);
+    }
+    return c;
+  }
+
+  private drop(c: Cached) {
+    c.anim.dispose();
+    c.inst.group.removeFromParent();
+    c.inst.dispose();
+  }
+
+  /** Put the right two fighters on the mats: the player bare-headed in the fighter shot, otherwise in headgear. */
+  private showFighters() {
+    if (!this.gltf) return;
     const me = this.o.fighter;
-    const defs = [CHARACTERS[me], CHARACTERS[me === 'jae' ? 'hana' : 'jae']];
-    const belts: BeltColor[] = [this.o.belt, 'black'];
-    const corners = ['chung', 'hong'] as const;
+    const bare = this.shotName === 'fighter';
+    // The opponent is out of frame in the fighter shot: it follows the
+    // selection when the camera next shows it (behind the same dim), so the
+    // cache holds six previews plus one or two opponents, never rebuilding.
+    const opponent = bare && this.active[1] ? this.active[1] : this.instance(nextFighter(me), 'hong', 'black', true);
+    const next: [Cached, Cached] = [this.instance(me, 'chung', this.o.belt, !bare), opponent];
     for (let i = 0; i < 2; i++) {
-      const c = createCharacter(this.gltf, defs[i], corners[i], belts[i]);
-      this.scene.add(c.group);
-      this.chars.push(c);
-      this.anims.push(new FighterAnimator(c.group, c.model, c.clips, i + 7));
+      if (this.active[i] === next[i]) continue;
+      if (this.active[i]) this.active[i]!.inst.group.visible = false;
+      next[i].inst.group.visible = true;
+      this.active[i] = next[i];
     }
     const [a, b] = this.world.fighters;
-    a.x = b.x = 0;
-    a.z = -1.3;
-    b.z = 1.3;
+    if (a.x !== 0 || Math.abs(a.z + 1.3) > 0.5) {
+      a.x = b.x = 0;
+      a.z = -1.3;
+      b.z = 1.3;
+    }
+  }
+
+  /**
+   * Fighter-select: build the six bare-head previews ahead of time, one per
+   * idle moment, the selected fighter first, so switching never builds
+   * geometry while the player is looking.
+   */
+  private schedulePrebuild() {
+    if (!this.gltf || this.prebuild.length) return;
+    const me = this.o.fighter;
+    this.prebuild = [me, ...ROSTER.filter((id) => id !== me)];
+    const ric = (window as unknown as { requestIdleCallback?: (f: () => void, o: { timeout: number }) => number }).requestIdleCallback;
+    const idle = (fn: () => void) => (ric ? ric(fn, { timeout: 400 }) : window.setTimeout(fn, 60));
+    const next = () => {
+      if (this.disposed) return;
+      const id = this.prebuild.shift();
+      if (!id) return;
+      this.instance(id, 'chung', this.o.belt, false);
+      // Keep the active pair most recently used, so the cache never evicts them.
+      for (const a of this.active) if (a) this.touch(a);
+      idle(next);
+    };
+    idle(next);
+  }
+
+  private touch(c: Cached) {
+    for (const [k, v] of this.cache)
+      if (v === c) {
+        this.cache.delete(k);
+        this.cache.set(k, v);
+        return;
+      }
   }
 
   /** Dust motes drifting through the window light (one draw call). */
@@ -151,14 +239,25 @@ export class MenuStage {
     this.scene.add(this.dust);
   }
 
+  /** Show another fighter (a cached instance: no rebuild once built). */
   setFighter(id: CharacterId, belt: Belt) {
     if (id === this.o.fighter && belt === this.o.belt) return;
     this.o = { ...this.o, fighter: id, belt };
-    this.buildFighters();
+    this.showFighters();
+  }
+
+  /** The player's headgear is off only in the fighter shot; the face light follows it. */
+  get bare() {
+    return this.shotName === 'fighter';
   }
 
   setShot(s: MenuShot) {
+    const wasBare = this.bare;
+    this.shotName = s;
     this.shot = SHOTS[s];
+    if (this.faceLight) this.faceLight.intensity = s === 'fighter' ? 9 : 0;
+    if (s === 'fighter') this.schedulePrebuild();
+    if (this.bare !== wasBare) this.showFighters();
     if (this.o.reducedMotion) {
       this.camPos.copy(this.shot.pos);
       this.camTarget.copy(this.shot.target);
@@ -212,7 +311,8 @@ export class MenuStage {
       w.step(this.intents);
       w.events.length = 0;
     }
-    w.fighters.forEach((f, i) => this.anims[i]?.update(f, 0, f.x, f.z, f.yaw, dt));
+    // Only the two fighters on the mats animate; cached ones stay hidden and idle.
+    w.fighters.forEach((f, i) => this.active[i]?.anim.update(f, 0, f.x, f.z, f.yaw, dt));
 
     // Camera: ease toward the panel's shot with a slow handheld drift.
     const k = 1 - Math.exp(-dt * 2.4);
@@ -261,8 +361,9 @@ export class MenuStage {
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
-    for (const a of this.anims) a.dispose();
-    for (const c of this.chars) c.dispose();
+    for (const c of this.cache.values()) this.drop(c);
+    this.cache.clear();
+    this.active = [null, null];
     this.env?.dispose();
     if (this.dust) {
       this.dust.geometry.dispose();

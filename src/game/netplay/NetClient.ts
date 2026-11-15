@@ -1,6 +1,6 @@
 import type { NetLink } from '../GameSession';
 import type { Belt } from '../progress/progress';
-import type { CharacterId } from '../render/characterFactory';
+import { type CharacterId, isCharacterId } from '../render/characterFactory';
 import type { NetMsg } from './Rollback';
 
 /** Multiplayer server (a Cloudflare Worker). Online play is hidden when unset. */
@@ -28,6 +28,8 @@ export interface PeerInfo {
   belt: Belt;
   ready: boolean;
   input: InputKind;
+  /** Set when this client can't load the other player's fighter (different roster): the match is blocked until someone refreshes. */
+  incompatible?: boolean;
 }
 export interface MatchCfg {
   mode: 'arcade' | 'competitive';
@@ -58,6 +60,8 @@ export interface NetState {
   rematch: { me: boolean; peer: boolean };
   /** Bumps on every new match start. */
   matchId: number;
+  /** The other player's fighter isn't in this build's roster: never start (or substitute) until a refresh. */
+  peerFighterUnknown: boolean;
   /** Online pause: both players are paused; it resumes on its own at `until` (ms timestamp). */
   pause: { by: 'me' | 'peer'; until: number } | null;
   /** After a resume, play continues at this time (a short countdown on both screens). */
@@ -155,6 +159,7 @@ export class NetClient {
       countdownEnd: null,
       rematch: { me: false, peer: false },
       matchId: 0,
+      peerFighterUnknown: false,
       pause: null,
       resumeAt: null,
     };
@@ -359,15 +364,25 @@ export class NetClient {
       case 'error':
         this.fail(m.code);
         break;
-      case 'info':
-        this.set({ peer: m.p });
+      case 'info': {
+        // Character data is checked before any match starts. An unknown fighter
+        // (the other player is on a different build) blocks Ready and the start;
+        // it is never swapped for another fighter, which would desync the match.
+        const known = isCharacterId(m.p?.fighter);
+        this.set({ peer: m.p, peerFighterUnknown: !known });
+        if (known === !!s.me.incompatible) {
+          const me: PeerInfo = { ...s.me, incompatible: known ? undefined : true, ready: known ? s.me.ready : false };
+          this.set({ me });
+          this.sendWs({ t: 'info', p: me });
+        }
         this.maybeStart();
         break;
+      }
       case 'cfg':
         if (s.role === 'guest') this.set({ cfg: m.c });
         break;
       case 'start':
-        if (s.role === 'guest') this.begin(m.hostCorner, m.c, m.id);
+        if (s.role === 'guest' && this.compatible()) this.begin(m.hostCorner, m.c, m.id);
         break;
       case 'rtc':
         void this.onRtc(m);
@@ -400,7 +415,7 @@ export class NetClient {
         if (s.role === 'guest') this.fail('host-left');
         else {
           this.closeRtc();
-          this.set({ peer: null, peerPresent: false, peerGoneAt: null, status: s.status === 'playing' ? s.status : 'lobby', me: { ...s.me, ready: false } });
+          this.set({ peer: null, peerPresent: false, peerGoneAt: null, peerFighterUnknown: false, status: s.status === 'playing' ? s.status : 'lobby', me: { ...s.me, ready: false, incompatible: undefined } });
         }
         break;
     }
@@ -419,10 +434,16 @@ export class NetClient {
     this.sendWs({ t: 'info', p: me });
   }
 
+  /** Both clients can build both fighters. */
+  compatible() {
+    const s = this.state;
+    return !s.peerFighterUnknown && !s.me.incompatible && !s.peer?.incompatible && isCharacterId(s.me.fighter) && (!s.peer || isCharacterId(s.peer.fighter));
+  }
+
   /** Host: start when both players are ready. */
   private maybeStart() {
     const s = this.state;
-    if (s.role !== 'host' || s.status !== 'lobby' || !s.peerPresent || !s.me.ready || !s.peer?.ready) return;
+    if (s.role !== 'host' || s.status !== 'lobby' || !s.peerPresent || !s.me.ready || !s.peer?.ready || !this.compatible()) return;
     const id = s.matchId + 1;
     this.sendWs({ t: 'start', hostCorner: s.hostCorner, c: s.cfg, id });
     this.begin(s.hostCorner, s.cfg, id);
@@ -430,7 +451,7 @@ export class NetClient {
 
   private maybeRematch() {
     const s = this.state;
-    if (s.role !== 'host' || !s.rematch.me || !s.rematch.peer) return;
+    if (s.role !== 'host' || !s.rematch.me || !s.rematch.peer || !this.compatible()) return;
     const hostCorner = (1 - s.hostCorner) as 0 | 1;
     const id = s.matchId + 1;
     this.sendWs({ t: 'start', hostCorner, c: s.cfg, id });

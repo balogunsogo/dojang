@@ -142,7 +142,8 @@ export class FighterAnimator {
   /** Debug: force a pose (pose lab). */
   overridePose: Pose | null = null;
 
-  constructor(group: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[], seed = 1) {
+  /** `floorProbe: false` skips the KO floor-contact setup (menu fighters never fall). */
+  constructor(group: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[], seed = 1, opts: { floorProbe?: boolean } = {}) {
     this.group = group;
     this.seed = seed * 12.9898;
     // Each fighter has a slightly different natural tempo.
@@ -192,7 +193,7 @@ export class FighterAnimator {
       action.enabled = false;
       this.actions.set(clip.name, action);
     }
-    this.buildFloorProbe();
+    if (opts.floorProbe !== false) this.buildFloorProbe();
   }
 
   /**
