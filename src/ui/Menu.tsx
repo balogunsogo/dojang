@@ -416,6 +416,10 @@ function FighterSelect({ onBack, go }: { onBack(): void; go(p: MenuPanel): void 
                   </span>
                 </div>
               ))}
+              {/* Phones: the belt marker ends the one-line stats. */}
+              <div className="stat-belt" aria-hidden>
+                <BeltMarker belt={progress.belt} label={false} />
+              </div>
             </dl>
           </div>
           <p className="belt-line">

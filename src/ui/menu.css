@@ -317,10 +317,11 @@ kbd { font: inherit; font-weight: 600; color: var(--fg); }
 .fighter-stats dd { margin: 0; font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
 .fighter-stats .track { display: block; height: 2px; margin-top: var(--s1); background: rgb(239 230 216 / .16); }
 .fighter-stats .track i { display: block; height: 100%; background: var(--fg); transition: width var(--t-base) var(--ease); }
+.fighter-stats .stat-belt { display: none; }
 .belt-line { display: flex; align-items: center; gap: var(--s3); margin: var(--s5) 0 0; font-size: 0.875rem; line-height: 1.25rem; color: var(--muted); }
 .fighter-select .confirm .btn-primary { transition: transform 80ms var(--ease), background var(--t-fast); }
 .fighter-select .confirm.pressed .btn-primary { transform: scale(.98); }
-.screen-hints { position: absolute; z-index: 2; right: calc(var(--edge) + var(--sar)); bottom: calc(var(--s7) + var(--sab)); }
+.screen-hints { text-shadow: 0 1px 3px rgb(21 18 15 / .9); position: absolute; z-index: 2; right: calc(var(--edge) + var(--sar)); bottom: calc(var(--s7) + var(--sab)); }
 @media (prefers-reduced-motion: reduce) {
   .fighter-detail .fade { animation: detail-in var(--t-fast) linear both; }
   .fighter-stats .track i { transition: none; }
@@ -473,15 +474,15 @@ kbd.pad { font-family: var(--font-ui); letter-spacing: 0; }
 }
 /* Phones (both orientations): one stats line with the belt marker. */
 @media (max-height: 500px) and (orientation: landscape), (max-width: 599px) and (orientation: portrait) {
-  .fighter-detail { position: relative; }
   .fighter-stats { display: flex; gap: 0; margin: var(--s1) 0 0; font-size: 0.8125rem; line-height: 1.125rem; }
   .fighter-stats div { flex-direction: row; gap: 4px; }
   .fighter-stats div + div::before { content: '·'; margin: 0 6px; color: var(--muted); }
   .fighter-stats dt { font-size: inherit; font-weight: 400; }
   .fighter-stats dd { font-size: inherit; line-height: inherit; }
   .fighter-stats .track { display: none; }
-  .belt-line { position: absolute; right: 0; bottom: 0; margin: 0; height: 1.125rem; }
-  .belt-line > span:not(.belt-marker) { display: none; }
+  .belt-line { display: none; }
+  .fighter-stats .stat-belt { display: flex; align-items: center; margin-left: var(--s3); }
+  .fighter-stats .stat-belt::before { content: none; }
   .fighter-select .btn-primary { min-height: 48px; }
 }
 @media (max-width: 599px) and (orientation: portrait) {
