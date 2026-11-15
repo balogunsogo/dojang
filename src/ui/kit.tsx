@@ -143,7 +143,7 @@ export function BackButton({ onClick, label = 'Menu' }: { onClick(): void; label
         onClick();
       }}
       aria-label={`Back to ${label.toLowerCase()}`} data-testid="menu-back">
-      <span aria-hidden>←</span> {label}
+      <span aria-hidden>←</span> <span className="lbl">{label}</span>
     </button>
   );
 }
@@ -186,39 +186,39 @@ export function Segmented<T extends string | number>({ value, options, onChange,
 }
 
 /* ── Option row (single-select, native radio underneath) ──────────── */
-export function OptionRow({ name, group, checked, onSelect, title, description, marker, testid }: { name?: string; group: string; checked: boolean; onSelect(): void; title: ReactNode; description?: ReactNode; marker?: ReactNode; testid?: string }) {
+export function OptionRow({ name, group, checked, onSelect, title, description, marker, aside, compact, followFocus, testid }: { name?: string; group: string; checked: boolean; onSelect(): void; title: ReactNode; description?: ReactNode; marker?: ReactNode; aside?: ReactNode; compact?: boolean; followFocus?: boolean; testid?: string }) {
+  const select = () => {
+    audio.click();
+    onSelect();
+  };
   return (
-    <label className={`option-row ${checked ? 'on' : ''}`} data-testid={testid}>
+    <label className={`option-row ${compact ? 'compact' : ''} ${checked ? 'on' : ''}`} data-testid={testid}>
       <input
         type="radio"
         name={group}
         value={name}
         checked={checked}
-        onChange={() => {
-          audio.click();
-          onSelect();
-        }}
+        onChange={select}
+        // Selection follows focus (gamepad focus moves without checking the radio).
+        onFocus={followFocus ? () => !checked && select() : undefined}
       />
       {marker && <span className="marker">{marker}</span>}
       <span className="text">
         <span className="name">{title}</span>
         {description && <span className="desc">{description}</span>}
       </span>
+      {aside && <span className="aside">{aside}</span>}
       <span className="radio" aria-hidden />
     </label>
   );
 }
-
-/** Arrow keys inside a radio group move between rows (native radios do this; this keeps it for mixed content). */
-export function OptionGroup({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+export function OptionGroup({ label, children, className = '', onKeyDown }: { label: string; children: ReactNode; className?: string; onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void }) {
   return (
-    <div className={`option-group ${className}`} role="radiogroup" aria-label={label}>
+    <div className={`option-group ${className}`} role="radiogroup" aria-label={label} onKeyDown={onKeyDown}>
       {children}
     </div>
   );
 }
-
-/* ── Belt marker & corner tag ─────────────────────────────────────── */
 export function BeltMarker({ belt, label = true, className = '' }: { belt: keyof typeof BELT_COLORS; label?: boolean; className?: string }) {
   return (
     <span className={`belt-marker ${className}`}>

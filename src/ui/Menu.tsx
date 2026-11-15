@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
 import type { Difficulty } from '../game/ai/AIController';
 import { audio } from '../game/audio/AudioEngine';
 import { BELT_ORDER, BELT_REQUIREMENTS, nextBelt, type Progress } from '../game/progress/progress';
-import { BELT_COLORS, CHARACTERS, type CharacterId } from '../game/render/characterFactory';
+import { BELT_COLORS, CHARACTERS, type CharacterId, ROSTER } from '../game/render/characterFactory';
 import { isTouchDevice } from '../game/render/quality';
 import { ACTIVITIES, activityById, type Activity } from '../game/training/activities';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
@@ -116,7 +116,7 @@ function Home({ go }: { go: (p: MenuPanel) => void }) {
     { id: 'arcade', label: 'Arcade sparring', description: 'Health-based · knock out or lead on time · best of three', testid: 'mode-arcade', onSelect: () => spar('arcade') },
     { id: 'competitive', label: 'Competitive sparring', description: 'WT-style points and gam-jeom · best of three', testid: 'mode-competitive', onSelect: () => spar('competitive') },
     { id: 'friend', label: 'Play a friend', description: 'Same device or online · best of three', testid: 'mode-friend', onSelect: () => go('friend') },
-    { id: 'fighter', tier: 2, label: 'Choose fighter', description: `${c.name}`, testid: 'open-fighter', onSelect: () => go('fighter') },
+    { id: 'fighter', tier: 2, label: 'Choose fighter', description: `${c.name} · ${progress.belt[0].toUpperCase() + progress.belt.slice(1)} belt`, testid: 'open-fighter', onSelect: () => go('fighter') },
     {
       id: 'progress',
       tier: 2,
@@ -323,65 +323,117 @@ function TrainingSelect({ onBack, leave }: { onBack(): void; leave(fn: () => voi
 }
 
 /* ── Fighter ───────────────────────────────────────────────────────── */
+const beltName = (b: string) => b[0].toUpperCase() + b.slice(1);
+const statValue = (v: number) => Math.round(v * 100);
+// Track fill for a stat: 85 is the floor, 115 the ceiling of the roster's spread.
+const statFill = (v: number) => `${Math.min(100, Math.max(4, ((v - 85) / 30) * 100))}%`;
+const landscapeGrid = () => {
+  try {
+    return window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
+  } catch {
+    return false;
+  }
+};
+
 function FighterSelect({ onBack, go }: { onBack(): void; go(p: MenuPanel): void }) {
   const progress = useGameStore((s) => s.progress);
   const setFighter = useGameStore((s) => s.setFighter);
+  const [pressed, setPressed] = useState(false);
   const c = CHARACTERS[progress.fighter];
-  const stat = (v: number) => Math.round(v * 100);
+  const stats: [string, number][] = [
+    ['Power', statValue(c.stats.power)],
+    ['Speed', statValue(c.stats.speed)],
+    ['Recovery', statValue(c.stats.staminaRegen)],
+  ];
+  const pick = (id: CharacterId) => {
+    setFighter(id);
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.roster input[value="${id}"]`)?.focus());
+  };
+  // Native radios already wrap on the arrows. In the phone-landscape 2 x 3 grid
+  // (filled column-first), left and right jump to the same row in the other column.
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || !landscapeGrid()) return;
+    e.preventDefault();
+    const i = ROSTER.indexOf(progress.fighter);
+    pick(ROSTER[(i + 3) % ROSTER.length]);
+  };
+  const confirm = () => {
+    if (pressed) return;
+    setPressed(true);
+    window.setTimeout(() => go('spar'), 80);
+  };
   return (
-    <ScreenShell
-      title="Choose fighter"
-      titleId="t-fighter"
-      onBack={onBack}
-      footer={
-        <PrimaryButton onClick={() => go('spar')} hint="Enter" testid="fighter-confirm">
-          Fight as {c.short}
-        </PrimaryButton>
-      }
-    >
-      <p className="body-copy">You fight in the blue Chung corner; the other fighter takes the red Hong corner.</p>
-      <OptionGroup label="Fighter">
-        {(Object.keys(CHARACTERS) as CharacterId[]).map((id) => (
-          <OptionRow
-            key={id}
-            group="fighter"
-            name={id}
-            checked={progress.fighter === id}
-            onSelect={() => setFighter(id)}
-            title={
-              <>
-                {CHARACTERS[id].name}{' '}
-                <span lang="ko" className="ko">
-                  {CHARACTERS[id].hangul}
-                </span>
-              </>
-            }
-            description={CHARACTERS[id].blurb}
-            testid={`fighter-${id}`}
-          />
-        ))}
-      </OptionGroup>
-      <dl className="facts stats" aria-live="polite">
-        <div>
-          <dt>Power</dt>
-          <dd>{stat(c.stats.power)}</dd>
+    <>
+      <ScreenShell
+        title="Choose fighter"
+        titleId="t-fighter"
+        onBack={onBack}
+        className="fighter-select"
+        footer={
+          <div className={`confirm ${pressed ? 'pressed' : ''}`}>
+            <PrimaryButton onClick={confirm} hint="Enter" testid="fighter-confirm">
+              Fight as {c.short}
+            </PrimaryButton>
+          </div>
+        }
+      >
+        <p className="body-copy intro">You fight in the blue Chung corner.</p>
+        <OptionGroup label="Fighter" className="roster" onKeyDown={onKey}>
+          {ROSTER.map((id) => (
+            <OptionRow
+              key={id}
+              compact
+              followFocus
+              group="fighter"
+              name={id}
+              checked={progress.fighter === id}
+              onSelect={() => setFighter(id)}
+              title={
+                <>
+                  {CHARACTERS[id].name}
+                  {CHARACTERS[id].hangul && (
+                    <span lang="ko" className="ko">
+                      {CHARACTERS[id].hangul}
+                    </span>
+                  )}
+                </>
+              }
+              aside={CHARACTERS[id].origin}
+              testid={`fighter-${id}`}
+            />
+          ))}
+        </OptionGroup>
+        <div className="fighter-detail" aria-live="polite" data-testid="fighter-detail">
+          <div className="fade" key={progress.fighter}>
+            <p className="blurb">{c.blurb}</p>
+            <dl className="fighter-stats" aria-label={stats.map(([k, v]) => `${k} ${v}`).join(', ')}>
+              {stats.map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                  <span className="track" aria-hidden>
+                    <i style={{ width: statFill(v) }} />
+                  </span>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <p className="belt-line">
+            <BeltMarker belt={progress.belt} label={false} />
+            <span>{beltName(progress.belt)} belt · your rank carries to every fighter</span>
+          </p>
         </div>
-        <div>
-          <dt>Speed</dt>
-          <dd>{stat(c.stats.speed)}</dd>
-        </div>
-        <div>
-          <dt>Recovery</dt>
-          <dd>{stat(c.stats.staminaRegen)}</dd>
-        </div>
-        <div>
-          <dt>Belt</dt>
-          <dd>
-            <BeltMarker belt={progress.belt} />
-          </dd>
-        </div>
-      </dl>
-    </ScreenShell>
+      </ScreenShell>
+      <div className="screen-hints">
+        <Hints
+          items={[
+            ['↑↓', 'Fighter'],
+            ['Enter', 'Confirm'],
+            ['Esc', 'Back'],
+          ]}
+        />
+      </div>
+    </>
   );
 }
 
