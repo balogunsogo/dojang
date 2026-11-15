@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { addFace, addPonytail, type FaceParams } from './face';
+import { addEars, addFace, addPonytail, type FaceParams } from './face';
+import { addBraid, addBun, addHairCap, type HairBack, type HairStyle } from './hair';
 
 /**
  * Procedural dobok and sparring equipment, fitted to the CC0 mannequin.
@@ -19,7 +20,10 @@ export interface GearColors {
   belt: THREE.Color;
   hair: THREE.Color;
   face: FaceParams;
-  ponytail: boolean;
+  hairStyle: HairStyle;
+  hairBack: HairBack;
+  /** false = the bare-head fighter-select preview: scalp hair and ears instead of headgear. */
+  headgear?: boolean;
 }
 
 type W = [number, number][]; // [boneIndex, weight]
@@ -365,6 +369,23 @@ export function buildGear(mesh: THREE.SkinnedMesh, samples: Sample[], colors: Ge
   };
   const prof: [number, number, number][] = [];
   for (let y = hlo.y + 0.005; y <= hhi.y; y += 0.01) prof.push([y, frontAt(y), widthAt(y)]);
+  // Phase 10: the mannequin's head is sparse, so the raw slab profile steps
+  // every centimetre (visible as ridges across the face). Smooth it.
+  {
+    const raw = prof.map((r) => [...r] as [number, number, number]);
+    for (let i = 0; i < prof.length; i++) {
+      let s1 = 0, s2 = 0, ws = 0;
+      for (let k = -3; k <= 3; k++) {
+        const j = THREE.MathUtils.clamp(i + k, 0, prof.length - 1);
+        const wk = Math.exp(-((k / 1.8) ** 2));
+        s1 += raw[j][1] * wk;
+        s2 += raw[j][2] * wk;
+        ws += wk;
+      }
+      prof[i][1] = Math.max(raw[i][1] - 0.004, s1 / ws);
+      prof[i][2] = s2 / ws;
+    }
+  }
   const interp = (y: number, k: 1 | 2) => {
     const i = THREE.MathUtils.clamp(Math.floor((y - prof[0][0]) / 0.01), 0, prof.length - 2);
     const t = THREE.MathUtils.clamp((y - prof[i][0]) / 0.01, 0, 1);
@@ -376,9 +397,14 @@ export function buildGear(mesh: THREE.SkinnedMesh, samples: Sample[], colors: Ge
     return headC.z + (fz - headC.z) * Math.sqrt(Math.max(0, 1 - (x / w) ** 2)) - 0.004;
   };
   addFace(B, { c: headC, r: headR }, iHead, colors.face, colors.skin, colors.hair, faceSurface);
-  if (colors.ponytail) addPonytail(B, { c: headC, r: headR }, iHead, iNeck, colors.hair);
+  const back = colors.hairBack;
+  if (back === 'ponytail') addPonytail(B, { c: headC, r: headR }, iHead, iNeck, colors.hair);
+  if (back === 'bun') addBun(B, { c: headC, r: headR }, iHead, iNeck, colors.hair, colors.headgear !== false);
+  if (back === 'braid') addBraid(B, { c: headC, r: headR }, iHead, iNeck, colors.hair);
+  if (colors.headgear === false) addEars(B, { c: headC, r: headR }, iHead, colors.skin, (y) => Math.max(0.05, interp(y, 2)));
+  if (colors.headgear === false) addHairCap(B, { c: headC, r: headR }, iHead, headS.map((s) => s.p), colors.hairStyle, colors.hair, colors.skin);
 
-  {
+  if (colors.headgear !== false) {
     // WT-style sparring headgear: padded shell from crown to jaw, open face
     // from brow to chin, raised forehead pad, segmented crown, domed ear pads
     // with holes, a thick rolled rim, chin strap and rear fastening.

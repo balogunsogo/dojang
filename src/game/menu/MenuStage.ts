@@ -5,7 +5,7 @@ import { DT } from '../config';
 import { type AttackKind, emptyIntent, type FighterIntent } from '../input/actions';
 import { createRng } from '../math';
 import type { Belt } from '../progress/progress';
-import { type BeltColor, CHARACTERS, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from '../render/characterFactory';
+import { type BeltColor, CHARACTERS, type CharacterId, nextFighter, type CharacterInstance, createCharacter, loadFighterAsset } from '../render/characterFactory';
 import { buildDojang, type DojangHandle } from '../render/Dojang';
 import type { QualityProfile } from '../render/quality';
 import { TrainingRules } from '../training/TrainingRules';
@@ -23,7 +23,7 @@ const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 // The fighters stand on the z axis (player at z = -1.3 facing +z). The
 // windows are on the +x wall, so shots from -x are softly backlit.
-const SHOTS: Record<MenuShot, Shot> = {
+export const SHOTS: Record<MenuShot, Shot> = {
   home: { pos: v(-5.4, 0.95, -0.9), target: v(0, 1.18, 0.1), fov: 36 },
   spar: { pos: v(-3.6, 0.6, -4.4), target: v(0.3, 1.25, 0.6), fov: 38 },
   training: { pos: v(2.3, 1.45, 1.6), target: v(-1.4, 1.05, -3.4), fov: 42 },
@@ -118,7 +118,7 @@ export class MenuStage {
     this.chars = [];
     this.anims = [];
     const me = this.o.fighter;
-    const defs = [CHARACTERS[me], CHARACTERS[me === 'jae' ? 'hana' : 'jae']];
+    const defs = [CHARACTERS[me], CHARACTERS[nextFighter(me)]];
     const belts: BeltColor[] = [this.o.belt, 'black'];
     const corners = ['chung', 'hong'] as const;
     for (let i = 0; i < 2; i++) {

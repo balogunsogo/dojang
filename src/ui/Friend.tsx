@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { type InputKind, type MatchCfg, net, onlineEnabled } from '../game/netplay/NetClient';
-import { loadFighterAsset, CHARACTERS, type CharacterId } from '../game/render/characterFactory';
+import { loadFighterAsset, CHARACTERS, type CharacterId, nextFighter } from '../game/render/characterFactory';
 import { isTouchDevice } from '../game/render/quality';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
 import { BeltMarker, GroupLabel, OptionGroup, OptionRow, PrimaryButton, QuietButton, ScreenShell, Segmented } from './kit';
@@ -92,7 +92,7 @@ export function FriendSetup({ onBack, leave, go }: { onBack(): void; leave(fn: (
   const online = onlineEnabled();
   const [where, setWhere] = useState<'couch' | 'online'>('couch');
   const [cfg, setCfg] = useState<MatchCfg>({ mode: 'arcade', round: rounds });
-  const [p2, setP2] = useState<CharacterId>(progress.fighter === 'jae' ? 'hana' : 'jae');
+  const [p2, setP2] = useState<CharacterId>(nextFighter(progress.fighter));
   const [nick, setNick] = useState(loadNick);
   const [code, setCode] = useState('');
   const me = () => ({ nick: cleanNick(nick) || 'Player', fighter: progress.fighter, belt: progress.belt, ready: false, input: inputKind() });

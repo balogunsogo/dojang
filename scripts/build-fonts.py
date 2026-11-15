@@ -16,9 +16,9 @@ NM = ROOT / 'node_modules' / '@fontsource'
 OUT = ROOT / 'src' / 'assets' / 'fonts'
 OUT.mkdir(parents=True, exist_ok=True)
 
-# Hangul rendered in the DOM: 도장 (wordmark), 김재원 / 박하나 (fighters),
+# Hangul rendered in the DOM: 도장 (wordmark), 김재원 / 박하나 / 서민준 (fighters),
 # 청 / 홍 (corners), 태권도 (Taekwondo). Keep in sync with src/ui/fonts.css.
-HANGUL = '도장김재원박하나청홍태권'
+HANGUL = '도장김재원박하나서민준청홍태권'
 
 for w in (300, 400):
     shutil.copy(NM / 'hahmlet/files' / f'hahmlet-latin-{w}-normal.woff2', OUT / f'hahmlet-latin-{w}.woff2')
