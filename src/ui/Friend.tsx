@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { type InputKind, type MatchCfg, net, onlineEnabled } from '../game/netplay/NetClient';
-import { loadFighterAsset, CHARACTERS, type CharacterId, nextFighter } from '../game/render/characterFactory';
+import { loadFighterAsset, CHARACTERS, type CharacterId, isCharacterId, nextFighter, ROSTER } from '../game/render/characterFactory';
 import { isTouchDevice } from '../game/render/quality';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
 import { BeltMarker, GroupLabel, OptionGroup, OptionRow, PrimaryButton, QuietButton, ScreenShell, Segmented } from './kit';
@@ -43,17 +43,17 @@ function clearRoomParam() {
   history.replaceState(null, '', u.toString());
 }
 
+/** Six name rows in a 2 x 3 grid, filled column-first (DOM order = roster order). */
 function FighterPick({ value, onChange, group }: { value: CharacterId; onChange(id: CharacterId): void; group: string }) {
   return (
-    <Segmented
-      label="Fighter"
-      testid={group}
-      value={value}
-      onChange={onChange}
-      options={(Object.keys(CHARACTERS) as CharacterId[]).map((id) => [id, CHARACTERS[id].name])}
-    />
+    <OptionGroup label="Fighter" className="fighter-pick" >
+      {ROSTER.map((id) => (
+        <OptionRow key={id} compact group={group} name={id} checked={value === id} onSelect={() => onChange(id)} title={CHARACTERS[id].name} testid={`${group}-${id}`} />
+      ))}
+    </OptionGroup>
   );
 }
+const fighterName = (id: string) => (isCharacterId(id) ? CHARACTERS[id].name : 'Unknown fighter');
 
 function RulesPick({ cfg, onChange }: { cfg: MatchCfg; onChange(c: Partial<MatchCfg>): void }) {
   return (
@@ -282,7 +282,7 @@ export function OnlineLobby({ onBack }: { onBack(): void }) {
         s.status === 'connecting' ? (
           <p className="caption">Connecting…</p>
         ) : (
-          <PrimaryButton onClick={() => net.updateMe({ ready: !s.me.ready })} hint="Enter" testid="ready" disabled={!s.peerPresent || !!countdown}>
+          <PrimaryButton onClick={() => net.updateMe({ ready: !s.me.ready })} hint="Enter" testid="ready" disabled={!s.peerPresent || !!countdown || !net.compatible()}>
             {s.me.ready ? 'Not ready' : 'Ready'}
           </PrimaryButton>
         )
@@ -318,10 +318,20 @@ export function OnlineLobby({ onBack }: { onBack(): void }) {
                 {p.nick || 'Player'} {you && <span className="muted">(you)</span>}
               </>
             }
-            description={`${CHARACTERS[p.fighter].name} · ${INPUT_LABEL[p.input]} · ${p.ready ? 'Ready' : 'Not ready'}`}
+            description={`${fighterName(p.fighter)} · ${INPUT_LABEL[p.input]} · ${p.ready ? 'Ready' : 'Not ready'}`}
           />
         ))}
       </OptionGroup>
+      {s.peerPresent && s.peerFighterUnknown && (
+        <p className="feedback warn" role="alert" data-testid="net-compat">
+          Your friend’s fighter isn’t in this version of DOJANG. Refresh the page to update, then rejoin the room.
+        </p>
+      )}
+      {s.peerPresent && !s.peerFighterUnknown && s.peer?.incompatible && (
+        <p className="caption" role="status" data-testid="net-compat">
+          Your friend needs to refresh to load your fighter.
+        </p>
+      )}
       {s.peerPresent && (
         <p className="caption">
           Connection <PingDot ping={s.ping} direct={s.direct} />
@@ -347,6 +357,8 @@ export function useOnlineMatchStarter() {
   const s = useNet();
   useEffect(() => {
     if (s.status !== 'playing' || !s.peer) return;
+    // Never start (or substitute) with character data this build can't load.
+    if (!isCharacterId(s.me.fighter) || !isCharacterId(s.peer.fighter)) return;
     const hostCorner = s.hostCorner;
     const me = (s.role === 'host' ? hostCorner : 1 - hostCorner) as 0 | 1;
     const mine = s.me;
