@@ -169,6 +169,8 @@ export function createCharacter(gltf: GLTF, def: CharacterDef, corner: 'chung' |
     mesh: skinned,
     clips: gltf.animations,
     dispose() {
+      // The bone texture (WebGL2 skinning) belongs to the skeleton.
+      skinned.skeleton.dispose();
       skinned.geometry.dispose();
       material.dispose();
       gearGeo.dispose();

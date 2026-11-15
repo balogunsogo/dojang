@@ -170,7 +170,11 @@ export class MenuStage {
     if (!this.gltf) return;
     const me = this.o.fighter;
     const bare = this.shotName === 'fighter';
-    const next: [Cached, Cached] = [this.instance(me, 'chung', this.o.belt, !bare), this.instance(nextFighter(me), 'hong', 'black', true)];
+    // The opponent is out of frame in the fighter shot: it follows the
+    // selection when the camera next shows it (behind the same dim), so the
+    // cache holds six previews plus one or two opponents, never rebuilding.
+    const opponent = bare && this.active[1] ? this.active[1] : this.instance(nextFighter(me), 'hong', 'black', true);
+    const next: [Cached, Cached] = [this.instance(me, 'chung', this.o.belt, !bare), opponent];
     for (let i = 0; i < 2; i++) {
       if (this.active[i] === next[i]) continue;
       if (this.active[i]) this.active[i]!.inst.group.visible = false;
