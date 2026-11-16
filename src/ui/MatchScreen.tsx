@@ -7,6 +7,7 @@ import { useInputDevice } from '../game/input/device';
 import { net } from '../game/netplay/NetClient';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
 import { useGameStore } from '../store/useGameStore';
+import { useTournament } from '../store/useTournament';
 import { Hud } from './Hud';
 import { PauseMenu, ResultOverlay } from './Overlays';
 import { PerfOverlay } from './PerfOverlay';
@@ -30,6 +31,7 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
   const activity = useGameStore((s) => s.activity);
   const fighter = useGameStore((s) => s.progress.fighter);
   const versus = useGameStore((s) => s.versus);
+  const tournament = useGameStore((s) => s.tournament);
 
   useEffect(() => {
     const st = useGameStore.getState();
@@ -43,8 +45,10 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
       difficulty,
       aiEnabled: params.get('ai') !== 'off',
       mode: useGameStore.getState().mode,
-      roundSeconds: useGameStore.getState().settings.compRoundSeconds,
-      playerCharacter: st.progress.fighter,
+      // A Dojang Open bout fixes its own round length and both fighters.
+      roundSeconds: tournament?.roundSeconds ?? useGameStore.getState().settings.compRoundSeconds,
+      playerCharacter: tournament?.fighter ?? st.progress.fighter,
+      ...(tournament ? { characters: [tournament.fighter, tournament.opponent] as [typeof tournament.fighter, typeof tournament.opponent] } : {}),
       playerBelt: st.progress.belt,
       activity: st.activity,
       ...(versus
@@ -63,7 +67,13 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
       callbacks: {
         onTrainingHud: (h) => useGameStore.getState().setTrainingHud(h),
         onTrainingEnd: (r) => useGameStore.getState().finishTraining(r),
-        onMatchEnd: (won) => useGameStore.getState().recordMatchResult(won),
+        onMatchEnd: (won) => {
+          if (!tournament) return useGameStore.getState().recordMatchResult(won);
+          // The Open records the bout (once) and counts it toward the match record.
+          const hist = session.competitive?.history ?? [];
+          const rounds = hist.map((h) => [h.stats[0].points, h.stats[1].points] as [number, number]);
+          void useTournament.getState().finishBout(won, rounds, [session.world.roundWins[0], session.world.roundWins[1]]);
+        },
         onCoach: (tip, scheme) => useGameStore.getState().setCoach(tip, scheme),
         onHud: (h) => useGameStore.getState().setHud(h),
         onToast: (t, ms) => useGameStore.getState().pushToast(t, ms),
@@ -100,7 +110,7 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
     };
     // Session is rebuilt only when the match configuration changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, quality, mode, activity, fighter, versus]);
+  }, [difficulty, quality, mode, activity, fighter, versus, tournament]);
 
   const paused = useGameStore((s) => s.paused);
   useEffect(() => {
@@ -133,6 +143,7 @@ export function MatchScreen() {
   const loading = useGameStore((s) => s.loading);
   const loadError = useGameStore((s) => s.loadError);
   const mode = useGameStore((s) => s.mode);
+  const tournamentBout = useGameStore((s) => s.tournament);
   const profile = useMemo(() => resolveQuality(settings.quality), [settings.quality]);
   const touch = useMemo(() => isTouchDevice(), []);
   const device = useInputDevice().device;
@@ -189,7 +200,7 @@ export function MatchScreen() {
       </Canvas>
       {loading && (
         <div className="loading">
-          <p className="eyebrow">{mode === 'training' ? 'Training' : mode === 'competitive' ? 'Competitive sparring' : 'Arcade sparring'}</p>
+          <p className="eyebrow">{mode === 'training' ? 'Training' : tournamentBout ? `The Dojang Open · No. ${tournamentBout.number}` : mode === 'competitive' ? 'Competitive sparring' : 'Arcade sparring'}</p>
           <p className="enter">Entering the dojang</p>
           <i className="line" aria-hidden />
         </div>

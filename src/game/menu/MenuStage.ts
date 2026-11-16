@@ -173,7 +173,8 @@ export class MenuStage {
     // The opponent is out of frame in the fighter shot: it follows the
     // selection when the camera next shows it (behind the same dim), so the
     // cache holds six previews plus one or two opponents, never rebuilding.
-    const opponent = bare && this.active[1] ? this.active[1] : this.instance(nextFighter(me), 'hong', 'black', true);
+    const opp = this.opp ?? { id: nextFighter(me), belt: 'black' as BeltColor };
+    const opponent = bare && this.active[1] ? this.active[1] : this.instance(opp.id, 'hong', opp.belt, true);
     const next: [Cached, Cached] = [this.instance(me, 'chung', this.o.belt, !bare), opponent];
     for (let i = 0; i < 2; i++) {
       if (this.active[i] === next[i]) continue;
@@ -237,6 +238,14 @@ export class MenuStage {
     const mat = new THREE.PointsMaterial({ color: '#ffd9a0', size: 0.022, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
     this.dust = new THREE.Points(geo, mat);
     this.scene.add(this.dust);
+  }
+
+  /** A specific opponent (a Dojang Open bout, at its AI belt), or null for the next fighter in roster order. */
+  private opp: { id: CharacterId; belt: BeltColor } | null = null;
+  setOpponent(o: { id: CharacterId; belt: BeltColor } | null) {
+    if (o?.id === this.opp?.id && o?.belt === this.opp?.belt) return;
+    this.opp = o;
+    this.showFighters();
   }
 
   /** Show another fighter (a cached instance: no rebuild once built). */
