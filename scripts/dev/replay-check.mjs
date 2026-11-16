@@ -11,7 +11,7 @@ const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
 let pass = 0, fail = 0;
 const check = (n, ok, d = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? `  (${d})` : ''}`); };
 const errors = [];
-const b = await chromium.launch();
+const b = await chromium.launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] });
 const shot = (p, n) => shots && p.screenshot({ path: `${shots}/${n}.png` });
 
 async function open(vp = { width: 1280, height: 800 }, o = {}) {
@@ -342,6 +342,39 @@ if (!only || only === 'tournament') {
     check('champion: back to the Champion screen; bracket, totals and stats unchanged', JSON.stringify(before) === JSON.stringify([await p.evaluate(() => localStorage.getItem('dojang.tournament.v1')), await progress(p)]));
     await p.context().close();
   }
+}
+
+
+// ── Viewer performance (software rendering; see docs for device notes) ──
+if (only === 'perf') {
+  const p = await open({ width: 1280, height: 800 });
+  await p.goto(base + '?nomenu3d&start=normal&ai=off');
+  await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+  await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+  for (let r = 0; r < 2 && !(await p.evaluate(() => window.__dojang.session.world.phase === 'match-over')); r++) await koRound(p);
+  await p.waitForSelector('[data-testid=watch-replay]', { timeout: 20000 });
+  const live = await p.evaluate(() => new Promise((res) => { const t = []; const f = (x) => { t.push(x); t.length < 40 ? requestAnimationFrame(f) : res(((t[t.length - 1] - t[0]) / (t.length - 1)).toFixed(1)); }; requestAnimationFrame(f); }));
+  const heap0 = await p.evaluate(() => (window.gc?.(), performance.memory.usedJSHeapSize));
+  const t0 = Date.now();
+  await p.click('[data-testid=watch-replay]');
+  await p.waitForFunction(() => window.__replay && !document.querySelector('[data-testid=replay-play]').disabled, null, { timeout: 30000 });
+  const init = Date.now() - t0;
+  const m = await p.evaluate(async () => {
+    const r = window.__replay;
+    const frames = await new Promise((res) => { const t = []; const f = (x) => { t.push(x); t.length < 40 ? requestAnimationFrame(f) : res(((t[t.length - 1] - t[0]) / (t.length - 1)).toFixed(1)); }; requestAnimationFrame(f); });
+    r.pause();
+    const s0 = performance.now();
+    for (let i = 0; i < 100; i++) r.seek((i * 0.37) % r.duration);
+    const seekMs = (performance.now() - s0) / 100;
+    return { bakeMs: Math.round(r.bakeMs), bakedKB: Math.round(r.bytes() / 1024), clipKB: Math.round(r.set.clips.reduce((s, c) => s + c.rows.byteLength, 0) / 1024), playFrameMs: frames, seekMs: +seekMs.toFixed(3) };
+  });
+  const heap1 = await p.evaluate(() => (window.gc?.(), performance.memory.usedJSHeapSize));
+  await p.click('[data-testid=replay-back]');
+  await p.waitForTimeout(800);
+  const heap2 = await p.evaluate(() => (window.gc?.(), performance.memory.usedJSHeapSize));
+  console.log(JSON.stringify({ liveFrameMs: live, viewerReadyMs: init, ...m, heapOpenMB: +((heap1 - heap0) / 1048576).toFixed(1), heapAfterCloseMB: +((heap2 - heap0) / 1048576).toFixed(1) }));
+  check('perf: viewer released (no player left after closing)', await p.evaluate(() => window.__replay === undefined));
+  await p.context().close();
 }
 
 check('no page errors', errors.length === 0, errors.join(' | '));

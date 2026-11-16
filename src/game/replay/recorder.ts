@@ -158,7 +158,7 @@ export class ReplayRecorder {
       const evs = this.stageEvents[s];
       for (const e of evs) e.t = this.count;
       this.commit(evs);
-      this.stageEvents[s] = [];
+      this.stageEvents[s] = NONE;
       this.committedFrame = next;
     }
   }
@@ -349,7 +349,10 @@ function continueRow(buf: Float32Array, r: number) {
 }
 
 /** Compact copies of this tick's combat events (only what playback needs). */
+const NONE: ReplayEvent[] = [];
 function convert(events: readonly CombatEvent[], w: CombatWorld, t: number): ReplayEvent[] {
+  // Most ticks have no events: no allocation then.
+  if (events.length === 0) return NONE;
   const out: ReplayEvent[] = [];
   for (const e of events) {
     switch (e.type) {

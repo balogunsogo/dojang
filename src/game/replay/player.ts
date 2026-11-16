@@ -90,6 +90,7 @@ export class ReplayPlayer {
     for (let i = 0; i < 2; i++) {
       const id = set.meta.ids[i] as CharacterId;
       const c = createCharacter(gltf, CHARACTERS[id], corners[i], set.meta.belts[i] as BeltColor);
+      c.group.visible = false; // until the first clip is baked
       scene.add(c.group);
       this.chars.push(c);
       // Same seeds as the match, so procedural variation matches.
@@ -115,6 +116,11 @@ export class ReplayPlayer {
     if (!clip) return;
     let b = this.baked.get(index);
     if (!b) {
+      // Baking drives the same bones that are drawn: keep the fighters out of sight meanwhile.
+      this.setVisible(false);
+      // Nothing else may move those bones between bake chunks.
+      this.cur = null;
+      this.playing = false;
       b = await this.bake(clip, yieldFn);
       if (this.disposed) return;
       this.baked.set(index, b);
@@ -123,6 +129,11 @@ export class ReplayPlayer {
     this.playing = false;
     audio.endReplay();
     this.seek(0);
+    this.setVisible(true);
+  }
+
+  private setVisible(on: boolean) {
+    for (const c of this.chars) c.group.visible = on;
   }
 
   private async bake(clip: ReplayClip, yieldFn: () => Promise<void>): Promise<Baked> {
