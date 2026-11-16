@@ -110,6 +110,7 @@ if (!only || only === 'win') {
   await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
   const m = await p.evaluate(() => { const s = window.__dojang.session; return { ids: s.defs.map((d) => d.id), mode: s.competitive ? 'competitive' : 'other', len: s.competitive?.roundSeconds, diff: s.ai.difficulty ?? null }; });
   check('QF1: a real Competitive match, player v drawn opponent, Open round length', m.ids[0] === 'amara' && m.ids[1] === a.bouts.qf1.b && m.mode === 'competitive' && m.len === 60, JSON.stringify(m));
+  check('QF1: Black belt maps to the existing "hard" AI preset', m.diff === 'hard', String(m.diff));
   const before = await progress(p);
   await playOut(p, WIN);
   await p.waitForSelector('[data-testid=open-next]', { timeout: 30000 });
