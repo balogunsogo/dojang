@@ -284,6 +284,66 @@ if (!only || only === 'mobile') {
   }
 }
 
+
+// ── Tournament: after a bout (post-win) and on the Champion screen ──
+if (!only || only === 'tournament') {
+  const B = (id, a, b2, winner = null, rounds = [], score = [0, 0], source = null) => ({ id, a, b: b2, winner, rounds, score, source });
+  const save = (stage) => {
+    const bouts = { qf1: B('qf1', 'tunde', 'jae', 'tunde', [[9, 4], [8, 6]], [2, 0], 'player'), qf2: B('qf2', 'minjun', 'hana', 'minjun', [[9, 4], [8, 6]], [2, 0], 'sim'), sf1: B('sf1', 'sofia', 'tunde'), sf2: B('sf2', 'amara', 'minjun'), f: B('f', null, null) };
+    if (stage === 'f') {
+      bouts.sf1 = B('sf1', 'sofia', 'tunde', 'tunde', [[5, 9], [7, 11]], [0, 2], 'player');
+      bouts.sf2 = B('sf2', 'amara', 'minjun', 'amara', [[10, 8], [9, 6]], [2, 0], 'sim');
+      bouts.f = B('f', 'tunde', 'amara');
+    }
+    return JSON.stringify({ version: 1, nextNumber: 2, history: [], totals: { entered: 0, titles: 0, best: null }, active: { version: 1, number: 1, seed: 1, fighter: 'tunde', difficulty: 'normal', roundSeconds: 60, seeds: ['sofia', 'amara'], startedAt: new Date(0).toISOString(), bouts } });
+  };
+  const ctxFor = async (stage) => {
+    const p = await open();
+    await p.evaluate((s) => localStorage.setItem('dojang.tournament.v1', s), save(stage)).catch(() => {});
+    await p.goto(base + '?nomenu3d');
+    await p.evaluate((s) => localStorage.setItem('dojang.tournament.v1', s), save(stage));
+    await p.reload();
+    await p.click('[data-testid=mode-tournament]');
+    await p.click('[data-testid=continue-open]');
+    await p.click('[data-testid=fight]');
+    await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+    await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+    for (let r = 0; r < 2; r++) {
+      await p.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+      await kick(p, 'KeyL', true);
+      await p.waitForTimeout(400);
+      await endRound(p, 0);
+    }
+    return p;
+  };
+  // Semifinal won: Watch replay on the post-win panel, back to the same panel.
+  {
+    const p = await ctxFor('sf');
+    await p.waitForSelector('[data-testid=open-next]', { timeout: 30000 });
+    const before = [await p.evaluate(() => localStorage.getItem('dojang.tournament.v1')), await progress(p)];
+    const v = await watch(p);
+    check('tournament: post-win panel offers the bout\'s replay', v.labels.length > 0, v.labels.join(' | '));
+    await p.click('[data-testid=replay-back]');
+    await p.waitForSelector('[data-testid=open-next]', { timeout: 5000 });
+    check('tournament: back to the post-win panel; bracket and stats unchanged', JSON.stringify(before) === JSON.stringify([await p.evaluate(() => localStorage.getItem('dojang.tournament.v1')), await progress(p)]));
+    await p.context().close();
+  }
+  // Final won: Champion screen → standalone viewer → back to Champion.
+  {
+    const p = await ctxFor('f');
+    await p.waitForSelector('[data-testid=champion]', { timeout: 30000 });
+    const before = [await p.evaluate(() => localStorage.getItem('dojang.tournament.v1')), await progress(p)];
+    const contexts = await p.evaluate(() => document.querySelectorAll('canvas').length);
+    const v = await watch(p);
+    check('champion: the final\'s highlights play after the match renderer is gone', v.labels.length > 0 && (await p.evaluate(() => document.querySelectorAll('canvas').length)) === 1, `${v.labels.join(' | ')}; canvases before ${contexts}`);
+    await shot(p, 'champion-replay');
+    await p.click('[data-testid=replay-back]');
+    await p.waitForSelector('[data-testid=champion]', { timeout: 15000 });
+    check('champion: back to the Champion screen; bracket, totals and stats unchanged', JSON.stringify(before) === JSON.stringify([await p.evaluate(() => localStorage.getItem('dojang.tournament.v1')), await progress(p)]));
+    await p.context().close();
+  }
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();
