@@ -6,6 +6,8 @@ import { ACTIVITIES, activityById } from '../game/training/activities';
 import { how } from '../game/training/Coach';
 import { useGameStore } from '../store/useGameStore';
 import { PrimaryButton, QuietButton, useGamepadNav } from './kit';
+import { WatchReplay } from './Replay';
+import { useReplay } from '../store/useReplay';
 import { PromotionNote } from './Overlays';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -237,6 +239,7 @@ export function TrainingSummary({ session }: { session: GameSession }) {
             >
               Training menu
             </QuietButton>
+            <WatchReplay onWatch={() => useReplay.getState().open({ kind: 'match' })} />
             <QuietButton onClick={toMenu}>Main menu</QuietButton>
           </div>
         </div>

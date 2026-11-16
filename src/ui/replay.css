@@ -1,0 +1,52 @@
+/* Replay viewer (Phase 12A). Existing tokens only; the scene stays the hero:
+   a top and a bottom ink gradient carry the text and controls. */
+.replay-ui { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; color: var(--fg); font-family: var(--font-ui); }
+.replay-ui > * { pointer-events: auto; }
+.replay-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); padding: calc(var(--s5) + var(--sat)) calc(var(--edge) + var(--sar)) var(--s7) calc(var(--edge) + var(--sal)); background: linear-gradient(180deg, rgb(21 18 15 / .86) 0%, rgb(21 18 15 / .55) 55%, rgb(21 18 15 / 0) 100%); text-shadow: 0 1px 3px rgb(21 18 15 / .9); }
+.replay-title .context { margin: 0; font-size: 0.875rem; color: var(--muted); }
+.replay-label { margin: var(--s1) 0 0; font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 2.25rem; }
+.replay-by { margin: 2px 0 0; font-size: 0.9375rem; color: var(--fg); opacity: .8; }
+.replay-back { flex: none; }
+.replay-bar { padding: var(--s7) calc(var(--edge) + var(--sar)) calc(var(--s5) + var(--sab)) calc(var(--edge) + var(--sal)); background: linear-gradient(0deg, rgb(21 18 15 / .86) 0%, rgb(21 18 15 / .6) 60%, rgb(21 18 15 / 0) 100%); }
+.replay-timeline { position: relative; }
+.replay-timeline input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 32px; margin: 0; background: transparent; cursor: pointer; }
+.replay-timeline input[type=range]::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, var(--fg) var(--pct), rgb(239 230 216 / .22) var(--pct)); border-radius: 2px; }
+.replay-timeline input[type=range]::-moz-range-track { height: 3px; background: rgb(239 230 216 / .22); }
+.replay-timeline input[type=range]::-moz-range-progress { height: 3px; background: var(--fg); }
+.replay-timeline input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6.5px; border-radius: 50%; background: var(--fg); border: 0; }
+.replay-timeline input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--fg); border: 0; }
+.replay-timeline input[type=range]:focus-visible { outline: 1.5px solid var(--brass); outline-offset: 2px; }
+.replay-timeline input[type=range]:disabled { opacity: .5; }
+/* The highlight moment on the timeline: one brass tick. */
+.replay-mark { position: absolute; top: 9px; width: 2px; height: 14px; margin-left: -1px; background: var(--brass); pointer-events: none; }
+.replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s6); margin-top: var(--s2); }
+.replay-transport { display: flex; align-items: center; gap: var(--s1); margin-right: auto; }
+.rbtn { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: none; border: 0; border-radius: var(--radius); color: var(--fg); font-size: 1rem; cursor: pointer; }
+.rbtn:hover:not(:disabled) { background: var(--surface-hover); }
+.rbtn:disabled { color: var(--faint); cursor: default; }
+.rbtn.play { width: 52px; height: 52px; font-size: 1.125rem; background: var(--surface); }
+.replay-time { margin-left: var(--s3); font-size: 0.9375rem; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 10ch; }
+.replay-controls .segmented.small button { min-width: 0; padding: 0 var(--s3); }
+.replay-screen .game-canvas { position: absolute; inset: 0; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .replay-top { padding-top: calc(var(--s3) + var(--sat)); padding-bottom: var(--s5); }
+  .replay-label { font-size: 1.25rem; line-height: 1.625rem; }
+  .replay-bar { padding-top: var(--s5); padding-bottom: calc(var(--s2) + var(--sab)); }
+  .replay-controls { gap: var(--s1) var(--s4); margin-top: 0; }
+  .replay-controls .segmented.small button { min-height: 40px; font-size: 0.875rem; }
+  .rbtn.play { width: 44px; height: 44px; }
+  .replay-back .hint-key { display: none; }
+}
+@media (max-width: 599px) and (orientation: portrait) {
+  .replay-top { padding-left: calc(var(--s5) + var(--sal)); padding-right: calc(var(--s5) + var(--sar)); }
+  .replay-label { font-size: 1.375rem; line-height: 1.75rem; }
+  .replay-bar { padding-left: calc(var(--s4) + var(--sal)); padding-right: calc(var(--s4) + var(--sar)); }
+  .replay-controls { gap: var(--s2); }
+  .replay-transport { width: 100%; justify-content: space-between; margin-right: 0; }
+  .replay-controls .segmented { flex: 1 1 auto; }
+  .replay-controls .segmented.small button { flex: 1; min-height: 44px; font-size: 0.875rem; }
+  .replay-back .hint-key { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-ui * { transition: none !important; animation: none !important; }
+}

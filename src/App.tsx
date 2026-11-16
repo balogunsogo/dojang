@@ -4,6 +4,7 @@ import { webglAvailable } from './game/render/webgl';
 import { useGameStore } from './store/useGameStore';
 import { roomFromUrl, useOnlineMatchStarter } from './ui/Friend';
 import { MatchScreen } from './ui/MatchScreen';
+import { ReplayScreen } from './ui/Replay';
 import { Menu } from './ui/Menu';
 
 /** Catches render/runtime errors in the match so the player never gets a blank screen. */
@@ -104,6 +105,12 @@ export function App() {
           <button onClick={() => location.reload()}>Retry</button>
         </div>
       </div>
+    );
+  if (screen === 'replay')
+    return (
+      <MatchBoundary>
+        <ReplayScreen />
+      </MatchBoundary>
     );
   return (
     <MatchBoundary>

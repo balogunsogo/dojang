@@ -86,6 +86,15 @@ describe('replay recorder (offline)', () => {
     for (let i = 1; i < set.clips.length; i++) expect(set.clips[i].start + set.clips[i].eventTick - (set.clips[i - 1].start + set.clips[i - 1].eventTick)).toBeGreaterThanOrEqual(MIN_SEPARATION_TICKS);
   });
 
+  it('a clip stops where a round resets the fighters (no teleport)', () => {
+    for (const c of set.clips) {
+      for (let r = c.eventTick + 1; r < c.len; r++) {
+        const ph = (i: number) => c.rows[i * ROW + 1];
+        expect(ph(r - 1) === 3 && ph(r) !== 3 && ph(r) !== 4).toBe(false);
+      }
+    }
+  });
+
   it('rows read back into the fields the animator uses', () => {
     const c = set.clips[0];
     const v = new FighterView(0).read(c.rows, c.eventTick);
@@ -111,6 +120,8 @@ describe('replay recorder: knockout continuation', () => {
       const ko = set?.clips.find((c) => c.label.startsWith('Knockout') && c.synthFrom < c.len);
       if (!ko) continue;
       found = true;
+      // The finishing strike is named (the world reports the KO before that tick's hit).
+      expect(ko.label).toMatch(/^Knockout · /);
       expect(ko.synthFrom).toBeLessThan(ko.len);
       const loser = ko.events.find((e) => e.k === 'ko') as Extract<ReplayEvent, { k: 'ko' }>;
       const a = new FighterView(loser.who).read(ko.rows, ko.synthFrom - 1);

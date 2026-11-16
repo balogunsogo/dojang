@@ -8,6 +8,8 @@ import { net } from '../game/netplay/NetClient';
 import { isTouchDevice, resolveQuality } from '../game/render/quality';
 import { useGameStore } from '../store/useGameStore';
 import { useTournament } from '../store/useTournament';
+import { useReplay } from '../store/useReplay';
+import { ReplayHost, ReplayViewer } from './Replay';
 import { Hud } from './Hud';
 import { PauseMenu, ResultOverlay } from './Overlays';
 import { PerfOverlay } from './PerfOverlay';
@@ -67,6 +69,8 @@ function SessionDriver({ input, input2, onReady }: { input: InputManager; input2
       callbacks: {
         onTrainingHud: (h) => useGameStore.getState().setTrainingHud(h),
         onTrainingEnd: (r) => useGameStore.getState().finishTraining(r),
+        // Replay capture: the newest match's recorder replaces the previous highlights.
+        onRecorder: (r) => useReplay.getState().adopt(r),
         onMatchEnd: (won) => {
           if (!tournament) return useGameStore.getState().recordMatchResult(won);
           // The Open records the bout (once) and counts it toward the match record.
@@ -144,11 +148,18 @@ export function MatchScreen() {
   const loadError = useGameStore((s) => s.loadError);
   const mode = useGameStore((s) => s.mode);
   const tournamentBout = useGameStore((s) => s.tournament);
+  // The replay viewer, opened from this match's result screen (it returns there).
+  const replayOpen = useReplay((s) => s.origin?.kind === 'match');
   const profile = useMemo(() => resolveQuality(settings.quality), [settings.quality]);
   const touch = useMemo(() => isTouchDevice(), []);
   const device = useInputDevice().device;
   // A controller on a phone or tablet hides the on-screen controls; touching the screen brings them back.
   const showTouch = (touch || settings.forceTouch || new URLSearchParams(location.search).get('touch') === '1') && device !== 'gamepad';
+
+  // A new session (rematch, next bout) closes a viewer opened over the previous one.
+  useEffect(() => {
+    if (useReplay.getState().origin?.kind === 'match') useReplay.getState().close();
+  }, [session]);
 
   useEffect(() => {
     session?.setPrefs({ cameraAssist: settings.cameraAssist, reduceShake: settings.reduceShake, reduceFlash: settings.reduceFlash });
@@ -197,6 +208,7 @@ export function MatchScreen() {
       >
         <color attach="background" args={['#1a1510']} />
         <SessionDriver input={input} input2={input2} onReady={setSession} />
+        {session && replayOpen && <ReplayHost session={session} blobShadows={!profile.shadows} />}
       </Canvas>
       {loading && (
         <div className="loading">
@@ -217,12 +229,13 @@ export function MatchScreen() {
           </div>
         </div>
       )}
-      {session && (mode === 'training' ? <TrainingHudView /> : <Hud />)}
-      {session && showTouch && <TouchControls input={input} />}
-      {session && <PauseMenu session={session} />}
-      {session && mode !== 'training' && <ResultOverlay session={session} />}
+      {session && !replayOpen && (mode === 'training' ? <TrainingHudView /> : <Hud />)}
+      {session && showTouch && !replayOpen && <TouchControls input={input} />}
+      {session && !replayOpen && <PauseMenu session={session} />}
+      {session && mode !== 'training' && !replayOpen && <ResultOverlay session={session} />}
       {session && versus?.kind === 'online' && <OnlineStatus session={session} />}
-      {session && mode === 'training' && <TrainingSummary session={session} />}
+      {session && mode === 'training' && !replayOpen && <TrainingSummary session={session} />}
+      {session && replayOpen && <ReplayViewer onBack={() => useReplay.getState().close()} />}
       {settings.showPerf && <PerfOverlay />}
       {touch && <RotatePrompt />}
     </div>

@@ -169,7 +169,8 @@ function loadSettings(): Settings {
 }
 
 interface GameStore {
-  screen: 'menu' | 'match';
+  /** 'replay': the standalone replay viewer (opened from a menu screen, e.g. Champion). */
+  screen: 'menu' | 'match' | 'replay';
   difficulty: Difficulty;
   mode: GameMode;
   paused: boolean;

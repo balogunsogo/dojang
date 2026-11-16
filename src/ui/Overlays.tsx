@@ -8,6 +8,8 @@ import { useTournament } from '../store/useTournament';
 import { CHARACTERS } from '../game/render/characterFactory';
 import { type Bout, nextPlayerBout, type OpenBracket, opponentIn, PLAYER_PATH, playerResult, seedOf, STAGE_NAME, STAGE_OF, STAGE_PLURAL } from '../game/tournament/tournament';
 import { dash, fname, roundsLine, sideOf, winnerScore } from './Tournament';
+import { WatchReplay } from './Replay';
+import { useReplay } from '../store/useReplay';
 import { useNet } from './Friend';
 import { BackButton, BeltMarker, Hints, Menu as MenuList, PrimaryButton, QuietButton, useGamepadNav } from './kit';
 import { SettingsPanel } from './SettingsPanel';
@@ -220,6 +222,7 @@ export function ResultOverlay({ session }: { session: GameSession }) {
         >
           Rematch
         </PrimaryButton>
+        <WatchReplay onWatch={() => useReplay.getState().open({ kind: 'match' })} />
         <QuietButton hint="Esc" onClick={toMenu} testid="to-menu">
           Back to menu
         </QuietButton>
@@ -255,6 +258,7 @@ function OnlineResult({ session, context }: { session: GameSession; context: str
         <PrimaryButton hint="Enter" autoFocus testid="rematch" disabled={s.rematch.me || !s.peerPresent} onClick={() => net.requestRematch()}>
           Rematch
         </PrimaryButton>
+        <WatchReplay onWatch={() => useReplay.getState().open({ kind: 'match' })} />
         <QuietButton onClick={() => net.backToLobby()} testid="to-lobby">
           Back to lobby
         </QuietButton>
@@ -463,6 +467,7 @@ function OpenResult({ session }: { session: GameSession }) {
           <PrimaryButton hint="Enter" autoFocus testid="open-next-bout" onClick={() => go('prematch')}>
             Next: {STAGE_NAME[nextStage]}
           </PrimaryButton>
+          <WatchReplay onWatch={() => useReplay.getState().open({ kind: 'match' })} />
           <QuietButton onClick={() => go('bracket')} testid="open-bracket">
             Bracket
           </QuietButton>
@@ -506,6 +511,7 @@ function OpenResult({ session }: { session: GameSession }) {
         <PrimaryButton hint="Enter" autoFocus testid="new-open" onClick={() => go('tournament')}>
           Enter a new Open
         </PrimaryButton>
+        <WatchReplay onWatch={() => useReplay.getState().open({ kind: 'match' })} />
         <QuietButton onClick={() => go('bracket', true)} testid="open-bracket">
           Bracket
         </QuietButton>

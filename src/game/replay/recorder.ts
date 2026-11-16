@@ -20,7 +20,7 @@
 import type { CombatEvent, CombatWorld } from '../combat/CombatWorld';
 import { TICK_HZ } from '../config';
 import type { AttackKind } from '../input/actions';
-import { F, FIGHTER_FIELDS, ROW, ROW_BYTES, STATES, W, WORLD_FIELDS, writeRow } from './format';
+import { F, FIGHTER_FIELDS, PHASES, ROW, ROW_BYTES, STATES, W, WORLD_FIELDS, writeRow } from './format';
 import { type Candidate, moveName, scoreHit, selectHighlights } from './highlights';
 
 export const PRE_TICKS = 6 * TICK_HZ;
@@ -30,6 +30,8 @@ const CLIP_ROWS = PRE_TICKS + POST_TICKS + 1;
 const MAX_CANDIDATES = 8;
 const STAGE_SLOTS = 128;
 const COMBO_TICKS = Math.round(1.2 * TICK_HZ);
+const PHASE_ROUND_OVER = PHASES.indexOf('round-over');
+const PHASE_MATCH_OVER = PHASES.indexOf('match-over');
 
 export type ReplayEvent =
   | { t: number; k: 'attack'; who: 0 | 1; move: AttackKind; strikeIn: number }
@@ -104,6 +106,8 @@ export class ReplayRecorder {
   private readonly stageFrame = new Int32Array(STAGE_SLOTS).fill(-1);
   private readonly stageEvents: ReplayEvent[][] = Array.from({ length: STAGE_SLOTS }, () => []);
   private committedFrame = -1;
+  /** Called when the match or activity completes (highlights chosen). */
+  onCompleted: (() => void) | null = null;
   /** Called once the clips are complete (all windows filled, or sealed early). */
   onSealed: ((s: ReplaySet) => void) | null = null;
 
@@ -189,7 +193,12 @@ export class ReplayRecorder {
         for (const e of evs) c.events.push(e);
       }
     }
-    if (!this.completed) for (const e of evs) this.consider(e);
+    if (!this.completed) {
+      // The world reports a KO from inside the damage step, before that tick's hit:
+      // take the hits first so the finishing strike is the one upgraded.
+      for (const e of evs) if (e.k !== 'ko' && e.k !== 'down') this.consider(e);
+      for (const e of evs) if (e.k === 'ko' || e.k === 'down') this.consider(e);
+    }
     if (this.chosen && this.chosen.every((c) => t >= c.tick + POST_TICKS || c.len >= CLIP_ROWS)) this.seal();
   }
 
@@ -257,6 +266,7 @@ export class ReplayRecorder {
     for (const c of this.cands) if (!this.chosen.includes(c)) this.pool.push(c.buf);
     this.cands = [];
     this.pool = [];
+    this.onCompleted?.();
     if (this.chosen.length === 0) this.seal();
     else if (this.chosen.every((c) => this.count - 1 >= c.tick + POST_TICKS)) this.seal();
   }
@@ -270,9 +280,17 @@ export class ReplayRecorder {
       const want = Math.min(CLIP_ROWS, c.tick - c.start + POST_TICKS + 1);
       // Continue each fighter's final state for display (time in state runs on; nothing else changes).
       for (let r = c.len; r < want; r++) continueRow(c.buf, r);
-      const len = Math.max(c.len, want);
+      let len = Math.max(c.len, want);
+      // A round that ends inside the clip resets the fighters to their marks: stop at the reset.
+      const ev = c.tick - c.start;
+      for (let r = ev + 1; r < len; r++) {
+        if (c.buf[(r - 1) * ROW + W.phase] === PHASE_ROUND_OVER && c.buf[r * ROW + W.phase] !== PHASE_ROUND_OVER && c.buf[r * ROW + W.phase] !== PHASE_MATCH_OVER) {
+          len = r;
+          break;
+        }
+      }
       const rows = c.buf.slice(0, len * ROW);
-      return { start: c.start, label: c.label, by: c.by, rows, len, eventTick: c.tick - c.start, events: c.events.map((e) => ({ ...e, t: e.t - c.start })).filter((e) => e.t >= 0 && e.t < len), synthFrom, score: c.score };
+      return { start: c.start, label: c.label, by: c.by, rows, len, eventTick: c.tick - c.start, events: c.events.map((e) => ({ ...e, t: e.t - c.start })).filter((e) => e.t >= 0 && e.t < len), synthFrom: Math.min(synthFrom, len), score: c.score };
     });
     this.sealed = { id: nextSetId++, meta: this.meta, clips };
     this.chosen = null;
@@ -307,6 +325,7 @@ export class ReplayRecorder {
     this.pool = [];
     this.recent = [];
     this.onSealed = null;
+    this.onCompleted = null;
   }
 }
 
