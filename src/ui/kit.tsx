@@ -332,6 +332,18 @@ export function ScreenShell({ title, context, onBack, backLabel, children, foote
 }
 
 /* ── Gamepad: D-pad / stick moves focus, A activates, B goes back ─── */
+export type PadButton = 'y' | 'lb' | 'rb';
+/** Listen for a screen-specific gamepad button (see useGamepadNav). */
+export function usePadButton(handler: (b: PadButton) => void) {
+  const ref = useRef(handler);
+  ref.current = handler;
+  useEffect(() => {
+    const f = (e: Event) => ref.current((e as CustomEvent<PadButton>).detail);
+    window.addEventListener('dojang:pad', f);
+    return () => window.removeEventListener('dojang:pad', f);
+  }, []);
+}
+
 export function useGamepadNav(onBack?: () => void) {
   useEffect(() => {
     let raf = 0;
@@ -375,6 +387,9 @@ export function useGamepadNav(onBack?: () => void) {
         right: !!pad.buttons[15]?.pressed || ax > 0.6,
         a: !!pad.buttons[0]?.pressed,
         b: !!pad.buttons[1]?.pressed,
+        y: !!pad.buttons[3]?.pressed,
+        lb: !!pad.buttons[4]?.pressed,
+        rb: !!pad.buttons[5]?.pressed,
       };
       const edge = (k: string) => now[k] && (!prev[k] || t > repeatAt);
       if (edge('up') || edge('down')) {
@@ -386,6 +401,8 @@ export function useGamepadNav(onBack?: () => void) {
       }
       if (now.a && !prev.a) (document.activeElement as HTMLElement | null)?.click();
       if (now.b && !prev.b) onBack?.();
+      // Screen-specific buttons (the Dojang Open: Y abandons, LB / RB switch bracket stages).
+      for (const k of ['y', 'lb', 'rb'] as const) if (now[k] && !prev[k]) window.dispatchEvent(new CustomEvent<PadButton>('dojang:pad', { detail: k }));
       prev = now;
     };
     const start = () => {
