@@ -2,21 +2,19 @@ import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
 import type { Difficulty } from '../game/ai/AIController';
 import { audio } from '../game/audio/AudioEngine';
 import { BELT_ORDER, BELT_REQUIREMENTS, nextBelt, type Progress } from '../game/progress/progress';
-import { BELT_COLORS, CHARACTERS, type CharacterId, ROSTER } from '../game/render/characterFactory';
+import { CHARACTERS, type CharacterId, ROSTER } from '../game/render/characterFactory';
 import { isTouchDevice } from '../game/render/quality';
 import { ACTIVITIES, activityById, type Activity } from '../game/training/activities';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
 import { BeltMarker, GroupLabel, Hints, Menu as MenuList, type MenuEntry, OptionGroup, OptionRow, PrimaryButton, QuietButton, ScreenShell, Segmented, useGamepadNav, Wordmark } from './kit';
 import { MenuBackdrop, prefersReducedMotion } from './MenuBackdrop';
+import { DIFFS } from './levels';
 import { PwaHint } from './PwaHint';
 import { FriendSetup, OnlineLobby } from './Friend';
+import { Bracket, Champion, homeItem, OpenHistory, PreMatch, TournamentEntry } from './Tournament';
+import { useTournament } from '../store/useTournament';
 import { ControlsReference, SettingsPanel } from './SettingsPanel';
 
-const DIFFS: { id: Difficulty; label: string; note: string; belt: keyof typeof BELT_COLORS }[] = [
-  { id: 'easy', label: 'White belt', note: 'Slow reactions, predictable, simple combinations', belt: 'white' },
-  { id: 'normal', label: 'Red belt', note: 'Better spacing and blocking, some counters', belt: 'red' },
-  { id: 'hard', label: 'Black belt', note: 'Reads your habits, counters, plays the score', belt: 'black' },
-];
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
@@ -73,9 +71,20 @@ export function Menu() {
     audio.back();
     go('home');
   };
-  useGamepadNav(panel === 'home' ? undefined : home);
+  // Back targets: Pre-match returns to the bracket, History to the Open's entry, everything else to Home.
+  // Choose fighter opened from the Open's entry returns there.
+  const fighterBack = () => {
+    const from = useGameStore.getState().fighterFrom;
+    useGameStore.setState({ fighterFrom: null });
+    if (from) {
+      audio.back();
+      go(from);
+    } else home();
+  };
+  const back = panel === 'prematch' ? () => go('bracket') : panel === 'openHistory' ? () => go('tournament') : panel === 'fighter' ? fighterBack : home;
+  useGamepadNav(panel === 'home' ? undefined : back);
   return (
-    <div className={`menu-root ${panel === 'home' ? 'at-home' : 'at-screen'} ${leaving ? 'leaving' : ''}`}>
+    <div className={`menu-root ${panel === 'home' ? 'at-home' : 'at-screen'} panel-${panel} ${leaving ? 'leaving' : ''}`}>
       <MenuBackdrop />
       <div className="scrim" aria-hidden />
       <main className="menu-layer" key={panel}>
@@ -84,7 +93,12 @@ export function Menu() {
         {panel === 'training' && <TrainingSelect onBack={home} leave={leave} />}
         {panel === 'friend' && <FriendSetup onBack={home} leave={leave} go={go} />}
         {panel === 'online' && <OnlineLobby onBack={() => go('friend')} />}
-        {panel === 'fighter' && <FighterSelect onBack={home} go={go} />}
+        {panel === 'fighter' && <FighterSelect onBack={fighterBack} go={go} />}
+        {panel === 'tournament' && <TournamentEntry onBack={home} go={go} />}
+        {panel === 'bracket' && <Bracket go={go} />}
+        {panel === 'prematch' && <PreMatch go={go} leave={leave} />}
+        {panel === 'champion' && <Champion go={go} />}
+        {panel === 'openHistory' && <OpenHistory go={go} />}
         {panel === 'progress' && <BeltProgression onBack={home} go={go} />}
         {(panel === 'settings' || panel === 'controls') && <SettingsScreen onBack={home} />}
       </main>
@@ -96,6 +110,7 @@ export function Menu() {
 function Home({ go }: { go: (p: MenuPanel) => void }) {
   const progress = useGameStore((s) => s.progress);
   const saveFailed = useGameStore((s) => s.saveFailed);
+  const tournament = useTournament();
   const c = CHARACTERS[progress.fighter];
   const started = progress.completed.length > 0 || Object.keys(progress.records).length > 0;
   const rec = recommendedActivity(progress);
@@ -115,6 +130,7 @@ function Home({ go }: { go: (p: MenuPanel) => void }) {
     },
     { id: 'arcade', label: 'Arcade sparring', description: 'Health-based · knock out or lead on time · best of three', testid: 'mode-arcade', onSelect: () => spar('arcade') },
     { id: 'competitive', label: 'Competitive sparring', description: 'WT-style points and gam-jeom · best of three', testid: 'mode-competitive', onSelect: () => spar('competitive') },
+    { id: 'tournament', ...homeItem(tournament), testid: 'mode-tournament', onSelect: () => go('tournament') },
     { id: 'friend', label: 'Play a friend', description: 'Same device or online · best of three', testid: 'mode-friend', onSelect: () => go('friend') },
     { id: 'fighter', tier: 2, label: 'Choose fighter', description: `${c.name} · ${progress.belt[0].toUpperCase() + progress.belt.slice(1)} belt`, testid: 'open-fighter', onSelect: () => go('fighter') },
     {
@@ -360,7 +376,10 @@ function FighterSelect({ onBack, go }: { onBack(): void; go(p: MenuPanel): void 
   const confirm = () => {
     if (pressed) return;
     setPressed(true);
-    window.setTimeout(() => go('spar'), 80);
+    // From the Open's entry, return there instead of sparring setup.
+    const from = useGameStore.getState().fighterFrom;
+    useGameStore.setState({ fighterFrom: null });
+    window.setTimeout(() => go(from ?? 'spar'), 80);
   };
   return (
     <>

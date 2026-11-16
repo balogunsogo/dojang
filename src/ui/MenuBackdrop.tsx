@@ -3,6 +3,11 @@ import { MenuStage, type MenuShot } from '../game/menu/MenuStage';
 import { resolveQuality } from '../game/render/quality';
 import { webglAvailable } from '../game/render/webgl';
 import { type MenuPanel, useGameStore } from '../store/useGameStore';
+import { bracketInView, useTournament } from '../store/useTournament';
+import { nextPlayerBout, opponentIn } from '../game/tournament/tournament';
+import type { BeltColor, CharacterId } from '../game/render/characterFactory';
+
+const AI_BELT = { easy: 'white', normal: 'red', hard: 'black' } as const satisfies Record<string, BeltColor>;
 
 const SHOT: Record<MenuPanel, MenuShot> = {
   home: 'home',
@@ -14,7 +19,29 @@ const SHOT: Record<MenuPanel, MenuShot> = {
   controls: 'settings',
   friend: 'spar',
   online: 'spar',
+  tournament: 'spar',
+  bracket: 'spar',
+  prematch: 'spar',
+  champion: 'fighter',
+  openHistory: 'spar',
 };
+
+/**
+ * Who stands on the mats for the Dojang Open screens: the Open's own fighter
+ * (it may differ from the menu's current fighter), and on Pre-match the real
+ * opponent at the Open's AI belt.
+ */
+function useOpenCast(panel: MenuPanel, menuFighter: CharacterId): { fighter: CharacterId; opponent: { id: CharacterId; belt: BeltColor } | null } {
+  const t = useTournament();
+  const active = t.save.active;
+  if (panel === 'tournament' || panel === 'prematch') {
+    const b = active && nextPlayerBout(active);
+    const opp = panel === 'prematch' && active && b ? opponentIn(active, b) : null;
+    return { fighter: active?.fighter ?? menuFighter, opponent: opp && active ? { id: opp, belt: AI_BELT[active.difficulty] } : null };
+  }
+  if (panel === 'bracket' || panel === 'champion') return { fighter: bracketInView(t)?.fighter ?? menuFighter, opponent: null };
+  return { fighter: menuFighter, opponent: null };
+}
 
 
 export const prefersReducedMotion = () => {
@@ -38,7 +65,7 @@ export function MenuBackdrop() {
   const enabled = useGameStore((s) => s.settings.menuScene);
   const quality = useGameStore((s) => s.settings.quality);
   const panel = useGameStore((s) => s.menuPanel);
-  const fighter = useGameStore((s) => s.progress.fighter);
+  const menuFighter = useGameStore((s) => s.progress.fighter);
   const belt = useGameStore((s) => s.progress.belt);
   // Fighter swaps happen behind a brief dim of the stage (120 ms in, swap at
   // the darkest point, 180 ms out). Repeated input restarts the dim instead
@@ -56,17 +83,21 @@ export function MenuBackdrop() {
   };
   useEffect(() => () => window.clearTimeout(dimTimer.current), []);
   const lastShot = useRef<MenuShot | null>(null);
+  const cast = useOpenCast(panel, menuFighter);
+  const fighter = cast.fighter;
+  const oppKey = cast.opponent ? `${cast.opponent.id}:${cast.opponent.belt}` : '';
 
   useEffect(() => {
     if (!enabled || !canvas.current || !webglAvailable() || new URLSearchParams(location.search).has('nomenu3d')) return;
     let s: MenuStage;
     try {
       const st = useGameStore.getState();
-      s = new MenuStage(canvas.current, { quality: resolveQuality(quality), fighter: st.progress.fighter, belt: st.progress.belt, reducedMotion: prefersReducedMotion() });
+      s = new MenuStage(canvas.current, { quality: resolveQuality(quality), fighter, belt: st.progress.belt, reducedMotion: prefersReducedMotion() });
     } catch {
       return; // Context creation failed: keep the still backdrop.
     }
     stage.current = s;
+    s.setOpponent(cast.opponent);
     s.setShot(SHOT[useGameStore.getState().menuPanel]);
     lastShot.current = SHOT[useGameStore.getState().menuPanel];
     s.init()
@@ -95,6 +126,13 @@ export function MenuBackdrop() {
     else st.setFighter(fighter, belt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fighter, belt]);
+  useEffect(() => {
+    const st = stage.current;
+    if (!st) return;
+    // A new opponent swaps behind the dim (Pre-match), like a fighter change.
+    behindDim(() => st.setOpponent(cast.opponent));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oppKey]);
 
   return (
     <div className={`menu-backdrop ${live ? 'live' : ''}`} aria-hidden>
