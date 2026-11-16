@@ -6,10 +6,11 @@ import { buildDojang } from '../game/render/Dojang';
 import { loadFighterAsset } from '../game/render/characterFactory';
 import { resolveQuality } from '../game/render/quality';
 import { ReplayPlayer } from '../game/replay/player';
+import { type ExportAspect, type ExportResult, ExportCancelled, exportName, exportSize, exportSupport, isConstrained, recordClip } from '../game/replay/exporter';
 import { audio } from '../game/audio/AudioEngine';
 import { useGameStore } from '../store/useGameStore';
 import { type ReplayCamera, type ReplaySpeed, useReplay } from '../store/useReplay';
-import { usePadButton, useGamepadNav, QuietButton, Segmented } from './kit';
+import { usePadButton, useGamepadNav, PrimaryButton, QuietButton, Segmented } from './kit';
 import { prefersReducedMotion } from './MenuBackdrop';
 import './replay.css';
 
@@ -22,7 +23,8 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart
  * on close.
  */
 export function ReplayHost({ session, blobShadows }: { session?: GameSession | null; blobShadows: boolean }) {
-  const { scene, camera } = useThree();
+  const { scene, camera, gl } = useThree();
+  const tier = resolveQuality(useGameStore.getState().settings.quality).tier;
   const playerRef = useRef<ReplayPlayer | null>(null);
   const index = useReplay((s) => s.index);
   const set = useReplay((s) => s.set);
@@ -51,6 +53,39 @@ export function ReplayHost({ session, blobShadows }: { session?: GameSession | n
           setSpeed: (sp) => ((p.speed = sp), useReplay.getState().ui({ speed: sp })),
           setCamera: (c) => (p.setPreset(c), useReplay.getState().ui({ camera: c })),
           select: (i) => useReplay.getState().ui({ index: i, ready: false, playing: false, time: 0 }),
+          exportVideo: async ({ aspect, speed, onProgress, signal }) => {
+            const el = gl.domElement;
+            const saved = el.getAttribute('style') ?? '';
+            useReplay.getState().ui({ exporting: true });
+            try {
+              return await recordClip({
+                gl,
+                camera: cam,
+                player: p,
+                aspect,
+                speed,
+                constrained: isConstrained(tier),
+                onProgress: (f) => {
+                  onProgress(f);
+                  useReplay.getState().ui({ time: p.time });
+                },
+                signal,
+                // Preview: show the canvas at the export's aspect, centred, while it records.
+                onSize: (w, h) => {
+                  const box = el.parentElement!.getBoundingClientRect();
+                  const k = Math.min((box.width * 0.86) / w, (box.height * 0.62) / h);
+                  el.style.position = 'absolute';
+                  el.style.width = `${Math.round(w * k)}px`;
+                  el.style.height = `${Math.round(h * k)}px`;
+                  el.style.left = `${Math.round((box.width - w * k) / 2)}px`;
+                  el.style.top = `${Math.round(box.height * 0.08)}px`;
+                },
+              });
+            } finally {
+              el.setAttribute('style', saved);
+              useReplay.getState().ui({ exporting: false, playing: false, time: p.time });
+            }
+          },
         },
       });
     });
@@ -94,7 +129,8 @@ export function ReplayHost({ session, blobShadows }: { session?: GameSession | n
   useFrame((_, dt) => {
     const p = playerRef.current;
     if (!p) return;
-    p.update(Math.min(dt, 0.1));
+    // Export records in real time: follow the wall clock (frames can be long); otherwise clamp hiccups.
+    p.update(Math.min(dt, useReplay.getState().exporting ? 0.5 : 0.1));
     const now = performance.now();
     const st = useReplay.getState();
     if (now - lastUi.current > 80 || (st.playing && !p.playing)) {
@@ -116,14 +152,15 @@ export function ReplayViewer({ onBack }: { onBack(): void }) {
   const wasPlaying = useRef(false);
   const n = set.clips.length;
   const go = (d: number) => c?.select((r.index + d + n) % n);
-  useGamepadNav(onBack);
+  const [exportOpen, setExportOpen] = useState(false);
+  useGamepadNav(exportOpen ? undefined : onBack);
   usePadButton((b) => (b === 'lb' ? go(-1) : b === 'rb' ? go(1) : undefined));
   useEffect(() => {
     playRef.current?.focus();
   }, []);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (!c) return;
+      if (!c || useReplay.getState().exporting || exportOpen) return;
       const t = e.target as HTMLElement | null;
       const onRange = t instanceof HTMLInputElement && t.type === 'range';
       if (e.key === 'Escape') {
@@ -162,10 +199,16 @@ export function ReplayViewer({ onBack }: { onBack(): void }) {
           </h1>
           {by && <p className="replay-by">{by}</p>}
         </div>
-        <QuietButton onClick={onBack} hint="Esc" testid="replay-back" className="replay-back">
-          Back to results
-        </QuietButton>
+        <div className="replay-top-actions">
+          <QuietButton onClick={() => setExportOpen(true)} testid="replay-export" className="replay-export">
+            Export video
+          </QuietButton>
+          <QuietButton onClick={onBack} hint="Esc" testid="replay-back" className="replay-back">
+            Back to results
+          </QuietButton>
+        </div>
       </header>
+      {exportOpen && <ExportPanel label={clip.label} speed={r.speed} onClose={() => setExportOpen(false)} />}
       <div className="replay-bar">
         <div className="replay-timeline">
           <input
@@ -296,3 +339,198 @@ function Hall({ quality }: { quality: ReturnType<typeof useGameStore.getState>['
   }, [scene, quality]);
   return null;
 }
+
+const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+
+/**
+ * Export the current highlight (Phase 12B): format, speed, progress,
+ * cancel, then save or share. States what the browser can actually do.
+ */
+function ExportPanel({ label, speed, onClose }: { label: string; speed: number; onClose(): void }) {
+  const support = exportSupport();
+  const [aspect, setAspect] = useState<ExportAspect>('16:9');
+  const [useSpeed, setUseSpeed] = useState<'normal' | 'selected'>('normal');
+  const [phase, setPhase] = useState<'setup' | 'recording' | 'done' | 'error'>('setup');
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<(ExportResult & { url: string; name: string }) | null>(null);
+  const [error, setError] = useState('');
+  const abort = useRef<AbortController | null>(null);
+  const tier = resolveQuality(useGameStore.getState().settings.quality).tier;
+  const duration = useReplay.getState().duration;
+  const sp = useSpeed === 'selected' ? speed : 1;
+  // A rough size label for the setup screen (the renderer is not resized yet).
+  const size = (() => {
+    const long = isConstrained(tier) ? 960 : 1280;
+    const short = Math.round((long * 9) / 16 / 2) * 2;
+    return aspect === '16:9' ? `${long} × ${short}` : `${short} × ${long}`;
+  })();
+  useEffect(() => () => {
+    abort.current?.abort();
+    if (result) URL.revokeObjectURL(result.url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (phase === 'recording') abort.current?.abort();
+      else close();
+    };
+    window.addEventListener('keydown', k, true);
+    return () => window.removeEventListener('keydown', k, true);
+  });
+  const close = () => {
+    if (result) URL.revokeObjectURL(result.url);
+    setResult(null);
+    onClose();
+  };
+  const start = async () => {
+    const c = useReplay.getState().controller;
+    if (!c || !support.ok) return;
+    abort.current = new AbortController();
+    setPhase('recording');
+    setProgress(0);
+    try {
+      const r = await c.exportVideo({ aspect, speed: sp, onProgress: setProgress, signal: abort.current.signal });
+      setResult({ ...r, url: URL.createObjectURL(r.blob), name: exportName(label, aspect, r.ext, sp) });
+      setPhase('done');
+    } catch (e) {
+      if (e instanceof ExportCancelled) setPhase('setup');
+      else {
+        setError(e instanceof Error ? e.message : String(e));
+        setPhase('error');
+      }
+    }
+  };
+  const save = () => {
+    if (!result) return;
+    const a = document.createElement('a');
+    a.href = result.url;
+    a.download = result.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const file = result ? new File([result.blob], result.name, { type: result.blob.type }) : null;
+  const canShare = !!file && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+  return (
+    <div className={`replay-export-panel ${phase}`} role="dialog" aria-modal="true" aria-labelledby="export-title" data-testid="export-panel">
+      <div className="panel">
+        <h2 id="export-title" className="export-title">
+          {phase === 'recording' ? 'Exporting video' : phase === 'done' ? 'Your video is ready' : 'Export video'}
+        </h2>
+        {!support.ok ? (
+          <>
+            <p className="body-copy" role="alert" data-testid="export-unsupported">
+              {support.reason} You can still watch the replay here.
+            </p>
+            <div className="row">
+              <QuietButton onClick={close} testid="export-close">
+                Close
+              </QuietButton>
+            </div>
+          </>
+        ) : phase === 'setup' ? (
+          <>
+            <p className="caption">{label}</p>
+            <div className="export-row">
+              <span className="group-label">Format</span>
+              <Segmented<ExportAspect>
+                small
+                label="Format"
+                testid="export-aspect"
+                value={aspect}
+                onChange={setAspect}
+                options={[
+                  ['16:9', 'Landscape 16:9'],
+                  ['9:16', 'Portrait 9:16'],
+                ]}
+              />
+            </div>
+            {speed !== 1 && (
+              <div className="export-row">
+                <span className="group-label">Speed</span>
+                <Segmented<'normal' | 'selected'>
+                  small
+                  label="Speed"
+                  testid="export-speed"
+                  value={useSpeed}
+                  onChange={setUseSpeed}
+                  options={[
+                    ['normal', 'Normal'],
+                    ['selected', `${speed}× slow motion`],
+                  ]}
+                />
+              </div>
+            )}
+            <p className="caption" data-testid="export-info">
+              {size} · {support.ext.toUpperCase()}
+              {support.audio ? ' with sound' : ' (no sound in this browser)'} · about {Math.round(duration / sp)} s · records in real time
+            </p>
+            <div className="row">
+              <PrimaryButton onClick={start} hint="Enter" testid="export-start" autoFocus>
+                Export
+              </PrimaryButton>
+              <QuietButton onClick={close} hint="Esc" testid="export-close">
+                Cancel
+              </QuietButton>
+            </div>
+          </>
+        ) : phase === 'recording' ? (
+          <>
+            <div className="export-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Export progress">
+              <i style={{ width: `${progress * 100}%` }} />
+            </div>
+            <p className="caption" aria-live="polite" data-testid="export-progress">
+              Recording {Math.round(progress * 100)}% · keep this tab open
+            </p>
+            <div className="row">
+              <QuietButton onClick={() => abort.current?.abort()} hint="Esc" testid="export-cancel">
+                Cancel
+              </QuietButton>
+            </div>
+          </>
+        ) : phase === 'done' && result ? (
+          <>
+            <p className="caption" data-testid="export-done">
+              {result.width} × {result.height} · {result.ext.toUpperCase()}
+              {result.audio ? ' with sound' : ''} · {result.seconds.toFixed(1)} s · about {Math.round(result.fps)} fps · {fmtSize(result.blob.size)}
+            </p>
+            {result.fps < 20 && (
+              <p className="caption warn-note" data-testid="export-choppy">
+                This device drew the replay slowly while recording, so the video may look choppy. Closing other apps and tabs, or charging the device, helps it record more smoothly.
+              </p>
+            )}
+            <div className="row">
+              <PrimaryButton onClick={save} hint="Enter" testid="export-save" autoFocus>
+                Save video
+              </PrimaryButton>
+              {canShare && (
+                <QuietButton onClick={() => void navigator.share({ files: [file!], title: label }).catch(() => undefined)} testid="export-share">
+                  Share
+                </QuietButton>
+              )}
+              <QuietButton onClick={close} hint="Esc" testid="export-close">
+                Done
+              </QuietButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="body-copy" role="alert" data-testid="export-error">
+              The video couldn’t be made: {error}
+            </p>
+            <div className="row">
+              <QuietButton onClick={close} testid="export-close">
+                Close
+              </QuietButton>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export { exportSize };

@@ -102,6 +102,8 @@ export class AudioEngine {
   /** Take and pitch/level variation source (Math.random live; seeded for replay cues). */
   private rand: () => number = Math.random;
   private seededNow = false;
+  /** Replay cues scheduled ahead play this much later (s). */
+  private extraDelay = 0;
   private amb: GainNode | null = null;
   private room: ConvolverNode | null = null;
   private noise: AudioBuffer | null = null;
@@ -322,7 +324,7 @@ export class AudioEngine {
     }
     if (!list) return;
     const now = ctx.currentTime;
-    const t = now + this.offset + Math.max(0, o.delay ?? 0);
+    const t = now + this.offset + Math.max(0, o.delay ?? 0) + this.extraDelay;
     const cdKey = o.key ?? name;
     const cd = COOLDOWN[name];
     if (cd && t - (this.last.get(cdKey) ?? -9) < cd) return;
@@ -378,6 +380,28 @@ export class AudioEngine {
     if (!this.ctx || !this.sfx) return;
     this.replayBus = this.ctx.createGain();
     this.replayBus.connect(this.sfx);
+    if (this.replayTap) this.replayBus.connect(this.replayTap);
+  }
+
+  /** Video export: replay sounds also feed a MediaStream (the replay's own mix, before volume and mute). */
+  private replayTap: MediaStreamAudioDestinationNode | null = null;
+  replayStream(): MediaStream | null {
+    const ctx = this.ctx as AudioContext | null;
+    if (!ctx || !('createMediaStreamDestination' in ctx)) return null;
+    this.endReplayStream();
+    this.replayTap = ctx.createMediaStreamDestination();
+    this.replayBus?.connect(this.replayTap);
+    return this.replayTap.stream;
+  }
+  endReplayStream() {
+    if (!this.replayTap) return;
+    try {
+      this.replayBus?.disconnect(this.replayTap);
+    } catch {
+      /* not connected */
+    }
+    for (const t of this.replayTap.stream.getTracks()) t.stop();
+    this.replayTap = null;
   }
 
   /** Cut every replay sound still playing (pause, seek, restart, exit) and route back to normal. */
@@ -392,7 +416,7 @@ export class AudioEngine {
   }
 
   /** Run `fn` with seeded variation, so a replayed cue sounds the same every time. */
-  seeded(seed: number, fn: () => void) {
+  seeded(seed: number, fn: () => void, delay = 0) {
     const prev = this.rand;
     let t = seed >>> 0 || 1;
     this.rand = () => {
@@ -402,11 +426,13 @@ export class AudioEngine {
       return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
     };
     this.seededNow = true;
+    this.extraDelay = delay;
     try {
       fn();
     } finally {
       this.rand = prev;
       this.seededNow = false;
+      this.extraDelay = 0;
     }
   }
 

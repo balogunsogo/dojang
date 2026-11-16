@@ -50,3 +50,31 @@
 @media (prefers-reduced-motion: reduce) {
   .replay-ui * { transition: none !important; animation: none !important; }
 }
+
+/* ── Export (Phase 12B) ─────────────────────────────────────────────── */
+.replay-top-actions { display: flex; gap: var(--s4); align-items: center; flex: none; }
+.replay-export-panel { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: var(--s5) calc(var(--s5) + var(--sar)) calc(var(--s5) + var(--sab)) calc(var(--s5) + var(--sal)); background: rgb(21 18 15 / .72); pointer-events: auto; }
+.replay-export-panel .panel { width: min(460px, 100%); padding: var(--s5) var(--s6); background: rgb(21 18 15 / .94); border-radius: var(--radius); box-shadow: 0 0 0 1px var(--line); }
+.replay-export-panel .export-title { margin: 0 0 var(--s2); font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 2.25rem; }
+.replay-export-panel .caption { margin: var(--s2) 0 0; }
+.replay-export-panel .export-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); margin-top: var(--s4); flex-wrap: wrap; }
+.replay-export-panel .export-row .group-label { margin: 0; }
+.replay-export-panel .row { display: flex; align-items: center; gap: var(--s5); margin-top: var(--s5); flex-wrap: wrap; }
+.replay-export-panel .row .btn-primary { width: auto; min-width: 200px; }
+/* While recording: the preview (the canvas, at the export's aspect) stays visible above; a slim panel below. */
+.replay-export-panel.recording { align-items: flex-end; background: transparent; }
+.replay-ui:has(.replay-export-panel.recording) .replay-top, .replay-ui:has(.replay-export-panel.recording) .replay-bar { visibility: hidden; }
+.export-progress { height: 3px; margin-top: var(--s3); background: rgb(239 230 216 / .22); border-radius: 2px; overflow: hidden; }
+.export-progress i { display: block; height: 100%; background: var(--fg); }
+@media (max-height: 500px) and (orientation: landscape) {
+  .replay-export-panel .panel { padding: var(--s3) var(--s5); }
+  .replay-export-panel .export-title { font-size: 1.25rem; line-height: 1.75rem; }
+  .replay-export-panel .row { margin-top: var(--s3); }
+  .replay-export-panel .row .btn-primary { min-height: 44px; }
+  .replay-export .hint-key { display: none; }
+}
+@media (max-width: 599px) and (orientation: portrait) {
+  .replay-top-actions { flex-direction: column; align-items: flex-end; gap: 0; }
+  .replay-export-panel .row .btn-primary { width: 100%; }
+}
+.replay-export-panel .warn-note { color: var(--warn); }
