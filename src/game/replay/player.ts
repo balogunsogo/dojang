@@ -215,6 +215,7 @@ export class ReplayPlayer {
     if (!this.cur) return;
     this.time = Math.max(0, Math.min(this.duration, seconds));
     this.tick = this.time * TICK_HZ;
+    this.scheduled = this.tick - 1e-6;
     audio.endReplay();
     if (this.playing) audio.beginReplay();
     this.applyPose();
@@ -225,8 +226,17 @@ export class ReplayPlayer {
     if (!this.cur) return;
     if (this.time >= this.duration - 1e-3) this.seek(0);
     this.playing = true;
+    this.scheduled = this.tick - 1e-6;
     audio.beginReplay();
   }
+
+  /**
+   * Sounds are scheduled this far ahead (real seconds) with exact delays, so
+   * a slow frame never makes them late. Larger while exporting (frames can
+   * be long there); pause and seek cut anything not yet played.
+   */
+  audioLookahead = 0.12;
+  private scheduled = -1;
 
   pause() {
     this.playing = false;
@@ -264,14 +274,18 @@ export class ReplayPlayer {
     audio.setPositions(pans[0][0], pans[0][1], pans[1][0], pans[1][1]);
   }
 
-  /** Effects and sounds for events crossed while playing forward. */
+  /** Effects when playback crosses an event; sounds scheduled just ahead, at their exact moment. */
   private fire(from: number, to: number) {
     const b = this.cur!;
+    const ahead = to + this.audioLookahead * this.speed * TICK_HZ;
     for (const c of b.cues) {
-      if (c.t <= from || c.t > to) continue;
+      if (c.t > from && c.t <= to && (c.k === 'hit' || c.k === 'block')) this.fx.spawn(c.point, c.k === 'hit' ? c.fx : 'block');
+      if (c.t <= this.scheduled || c.t > ahead) continue;
+      const delay = Math.max(0, (c.t - to) / TICK_HZ / this.speed);
       // Seeded by clip and tick: the same moment sounds the same on every replay.
-      audio.seeded((b.clip.start * 131 + c.t * 7919) >>> 0, () => playCue(c, this.speed, this.fx));
+      audio.seeded((b.clip.start * 131 + c.t * 7919) >>> 0, () => playCue(c, this.speed), delay);
     }
+    this.scheduled = Math.max(this.scheduled, ahead);
   }
 
   private applyPose() {
@@ -442,7 +456,7 @@ function cuesFor(e: ReplayClip['events'][number]): Cue[] {
  * air is scheduled to its slowed extension; recordings keep their pitch
  * (time-stretching short impacts sounds worse than playing them as they are).
  */
-function playCue(c: Cue, speed: number, fx: Effects) {
+function playCue(c: Cue, speed: number) {
   switch (c.k) {
     case 'attack':
       audio.technique({ kind: c.kind, strikeIn: c.strikeIn / speed, who: c.who });
@@ -453,11 +467,9 @@ function playCue(c: Cue, speed: number, fx: Effects) {
     case 'hit':
       audio.impact(c.impact, c.heavy, c.d);
       if (c.score > 0) audio.score(c.score);
-      fx.spawn(c.point, c.fx);
       break;
     case 'block':
       audio.blocked(c.punch, c.guardBreak, c.d);
-      fx.spawn(c.point, 'block');
       break;
     case 'ko':
       audio.knockout(c.who);

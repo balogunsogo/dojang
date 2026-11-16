@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ExportAspect, ExportResult } from '../game/replay/exporter';
 import type { ReplayRecorder, ReplaySet } from '../game/replay/recorder';
 
 export type ReplayCamera = 'broadcast' | 'side' | 'close';
@@ -13,6 +14,8 @@ export interface ReplayController {
   setSpeed(s: ReplaySpeed): void;
   setCamera(c: ReplayCamera): void;
   select(index: number): void;
+  /** Phase 12B: record the current highlight as a video. */
+  exportVideo(o: { aspect: ExportAspect; speed: number; onProgress(f: number): void; signal: AbortSignal }): Promise<ExportResult>;
 }
 
 /** Where the viewer returns to: the match's own result screen, or a menu panel (Champion). */
@@ -34,6 +37,8 @@ interface ReplayState {
   /** The current clip is baked and on screen. */
   ready: boolean;
   controller: ReplayController | null;
+  /** A video export is recording (the viewer's own controls stand by). */
+  exporting: boolean;
   /** Bumps when a match completes (result panels re-check for highlights). */
   completions: number;
   /** A new match or activity starts: forget the previous highlights. */
@@ -43,7 +48,7 @@ interface ReplayState {
   /** Seal (if needed) and open the viewer. */
   open(origin: ReplayOrigin, index?: number): boolean;
   close(): void;
-  ui(p: Partial<Pick<ReplayState, 'index' | 'playing' | 'speed' | 'camera' | 'time' | 'duration' | 'ready'>>): void;
+  ui(p: Partial<Pick<ReplayState, 'index' | 'playing' | 'speed' | 'camera' | 'time' | 'duration' | 'ready' | 'exporting'>>): void;
 }
 
 export const useReplay = create<ReplayState>((set, get) => ({
@@ -58,6 +63,7 @@ export const useReplay = create<ReplayState>((set, get) => ({
   duration: 0,
   ready: false,
   controller: null,
+  exporting: false,
   completions: 0,
   adopt: (r) => {
     get().pending?.dispose();
