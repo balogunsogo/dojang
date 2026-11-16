@@ -6,6 +6,7 @@ import { buildDojang } from '../game/render/Dojang';
 import { loadFighterAsset } from '../game/render/characterFactory';
 import { resolveQuality } from '../game/render/quality';
 import { ReplayPlayer } from '../game/replay/player';
+import { audio } from '../game/audio/AudioEngine';
 import { useGameStore } from '../store/useGameStore';
 import { type ReplayCamera, type ReplaySpeed, useReplay } from '../store/useReplay';
 import { usePadButton, useGamepadNav, QuietButton, Segmented } from './kit';
@@ -37,7 +38,8 @@ export function ReplayHost({ session, blobShadows }: { session?: GameSession | n
       const p = new ReplayPlayer(scene, cam, set, gltf, { blobShadows, reducedMotion: prefersReducedMotion() });
       playerRef.current = p;
       // Diagnostics, like window.__dojang for the session.
-      (window as unknown as { __replay?: ReplayPlayer }).__replay = p;
+      (window as unknown as { __replay?: ReplayPlayer; __audio?: typeof audio }).__replay = p;
+      (window as unknown as { __audio?: typeof audio }).__audio = audio;
       const r = useReplay.getState();
       r.ui({ ready: false });
       useReplay.setState({

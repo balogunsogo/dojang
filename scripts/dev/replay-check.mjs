@@ -137,6 +137,153 @@ if (!only || only === 'arcade') {
   await p.context().close();
 }
 
+
+/** Open the viewer from a result screen and wait until the clip is baked. */
+async function watch(p, sel = '[data-testid=watch-replay]') {
+  await p.waitForSelector(sel, { timeout: 20000 });
+  await p.click(sel);
+  await p.waitForSelector('[data-testid=replay]');
+  await p.waitForFunction(() => window.__replay && !document.querySelector('[data-testid=replay-play]').disabled, null, { timeout: 30000 });
+  return p.evaluate(() => ({ labels: window.__replay.set.clips.map((c) => c.label), by: window.__replay.set.clips.map((c) => c.by), names: window.__replay.set.meta.names }));
+}
+/** End the current round through the world's own flow (used after real scoring kicks). */
+async function endRound(p, w) {
+  await p.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+  await p.evaluate((w) => window.__dojang.session.world.endRound(w, 'time'), w);
+}
+
+// ── Competitive: real head kicks score; the result keeps its round table ──
+if (!only || only === 'competitive') {
+  const p = await open();
+  await p.goto(base + '?nomenu3d&start=normal&ai=off&mode=competitive');
+  await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+  await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+  for (let r = 0; r < 2; r++) {
+    await p.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+    await kick(p, 'KeyL', true);
+    await p.waitForTimeout(400);
+    await endRound(p, 0);
+  }
+  await p.waitForSelector('[data-testid=comp-summary]', { timeout: 30000 });
+  const v = await watch(p);
+  check('competitive: a scored head kick is a highlight, labelled with its points', v.labels.some((l) => /Roundhouse kick · \d points?|Head kick/.test(l)), v.labels.join(' | '));
+  await shot(p, 'competitive-replay');
+  await p.click('[data-testid=replay-back]');
+  check('competitive: back to the result with the round table intact', !!(await p.waitForSelector('[data-testid=comp-summary]', { timeout: 5000 }).catch(() => null)));
+  await p.context().close();
+}
+
+// ── Couch: highlights by either fighter (player 2 lands the head kicks) ──
+if (!only || only === 'couch') {
+  const p = await open();
+  await p.goto(base + '?nomenu3d');
+  await p.click('[data-testid=mode-friend]');
+  await p.click('[data-testid=start-couch]');
+  await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+  await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+  for (let r = 0; r < 2 && !(await p.evaluate(() => window.__dojang.session.world.phase === 'match-over')); r++) {
+    await p.waitForFunction(() => window.__dojang.session.world.phase === 'fight', null, { timeout: 60000 });
+    for (let i = 0; i < 8 && (await p.evaluate(() => window.__dojang.session.world.phase === 'fight')); i++) {
+      if (i === 1) await p.evaluate(() => (window.__dojang.session.world.fighters[0].health = 12));
+      await p.evaluate(() => { const [a, c] = window.__dojang.session.world.fighters; a.x = 0; a.z = -0.55; a.yaw = 0; c.x = 0; c.z = 0.55; c.yaw = Math.PI; c.stamina = 100; });
+      const s0 = await p.evaluate(() => window.__dojang.session.world.fighters[1].attackSerial);
+      await p.keyboard.down('Numpad6');
+      await p.keyboard.press('Numpad2');
+      await p.keyboard.up('Numpad6');
+      await p.waitForFunction((s) => window.__dojang.session.world.fighters[1].attackSerial > s, s0, { timeout: 8000 }).catch(() => {});
+      await p.waitForFunction(() => ['idle', 'guard'].includes(window.__dojang.session.world.fighters[1].state) || window.__dojang.session.world.phase !== 'fight', null, { timeout: 8000 }).catch(() => {});
+    }
+  }
+  await p.waitForSelector('[data-testid=result]', { timeout: 30000 });
+  const v = await watch(p);
+  check('couch: highlights credit player 2 (Hong), not "the player"', v.by.includes(1) && v.labels.some((l) => /Knockout|Head kick/.test(l)), `${v.labels.join(' | ')} by ${v.by.join(',')}`);
+  check('couch: the by-line shows P2\'s name', /P2/.test(await p.textContent('.replay-by')), await p.textContent('.replay-by'));
+  await shot(p, 'couch-replay');
+  await p.context().close();
+}
+
+// ── Training: a completed drill is a "Training combination" ──
+if (!only || only === 'training') {
+  const p = await open();
+  await p.goto(base + '?nomenu3d');
+  await p.click('[data-testid=mode-training]');
+  await p.click('[data-testid=activity-combo-front-round]');
+  await p.click('[data-testid=begin-activity]');
+  await p.waitForFunction(() => window.__dojang?.session?.ready && window.__dojang.session.training, null, { timeout: 90000 });
+  for (let r = 0; r < 3; r++) {
+    await kick(p, 'KeyK', false);
+    await kick(p, 'KeyL', false);
+  }
+  await p.waitForSelector('[data-testid=training-summary]', { timeout: 30000 });
+  const v = await watch(p);
+  check('training: summary offers the replay; a completed drill is labelled', v.labels.includes('Training combination'), v.labels.join(' | '));
+  await shot(p, 'training-replay');
+  await p.click('[data-testid=replay-back]');
+  check('training: back to the summary', !!(await p.waitForSelector('[data-testid=training-summary]', { timeout: 5000 }).catch(() => null)));
+  await p.context().close();
+}
+
+// ── Audio: cues follow the timeline; pause and seek stay silent; mute applies ──
+if (!only || only === 'audio') {
+  const p = await open();
+  await p.goto(base + '?nomenu3d&start=normal&ai=off');
+  await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+  await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+  for (let r = 0; r < 2 && !(await p.evaluate(() => window.__dojang.session.world.phase === 'match-over')); r++) await koRound(p);
+  await watch(p);
+  await p.evaluate(() => { window.__audio.logging = true; window.__audio.log.length = 0; });
+  const ev = await p.evaluate(() => window.__replay.clip.eventTick / 60);
+  await p.evaluate((t) => { window.__replay.pause(); window.__replay.seek(t - 0.6); window.__replay.play(); }, ev);
+  await p.waitForTimeout(1300);
+  const played = await p.evaluate(() => [...window.__audio.log]);
+  check('audio: the replay plays the recorded moment\'s sounds (technique air and the impact)', played.some((n) => /air|whoosh/.test(n)) && played.some((n) => /headgear|hogu|slap/.test(n)), played.join(','));
+  await p.evaluate(() => { window.__replay.pause(); window.__audio.log.length = 0; });
+  await p.waitForTimeout(500);
+  await p.evaluate((t) => { window.__replay.seek(t + 0.05); window.__replay.seek(t - 0.02); window.__replay.seek(t + 0.1); }, ev);
+  await p.waitForTimeout(400);
+  check('audio: paused and seeking across the impact plays nothing (no duplicates)', (await p.evaluate(() => window.__audio.log.length)) === 0, (await p.evaluate(() => window.__audio.log.join(','))));
+  // Seeded variation: the same moment twice gives the same take choice.
+  const take = async () => { await p.evaluate((t) => { window.__audio.log.length = 0; window.__replay.seek(t - 0.3); window.__replay.play(); }, ev); await p.waitForTimeout(700); await p.evaluate(() => window.__replay.pause()); return p.evaluate(() => window.__audio['lastVariant'] ? JSON.stringify([...window.__audio['lastVariant']]) : ''); };
+  const t1 = await take();
+  const t2 = await take();
+  check('audio: a replayed moment uses the same takes each time (seeded)', t1 === t2 && t1.length > 2, `${t1} / ${t2}`);
+  // Mute applies to the replay bus (it sits under the effects level and master).
+  await p.evaluate(() => window.__audio.setMix({ master: 0.8, sfx: 1, ambient: 0.5, muted: true }));
+  const g = await p.evaluate(() => window.__audio['master']?.gain.value);
+  check('audio: mute silences replay playback (master at 0)', g === 0, String(g));
+  check('audio: leaving the viewer closes the replay bus', await p.evaluate(async () => { document.querySelector('[data-testid=replay-back]').click(); await new Promise((r) => setTimeout(r, 300)); return window.__audio ? window.__audio['replayBus'] === null : true; }));
+  await p.context().close();
+}
+
+// ── Phones: the scene stays visible; essential controls fit ──
+if (!only || only === 'mobile') {
+  for (const [name, vp] of [['844x390', { width: 844, height: 390 }], ['390x844', { width: 390, height: 844 }], ['740x360', { width: 740, height: 360 }]]) {
+    // Matches are played in landscape (the game asks to rotate); a replay can be watched either way.
+    const portrait = vp.height > vp.width;
+    const p = await open(portrait ? { width: vp.height, height: vp.width } : vp, { touch: true });
+    await p.goto(base + '?nomenu3d&start=normal&ai=off');
+    await p.waitForFunction(() => window.__dojang?.session?.ready, null, { timeout: 90000 });
+    await p.evaluate(() => (window.__dojang.session.world.skipIntro = true));
+    for (let r = 0; r < 2 && !(await p.evaluate(() => window.__dojang.session.world.phase === 'match-over')); r++) await koRound(p);
+    await watch(p);
+    if (portrait) await p.setViewportSize(vp);
+    await p.waitForTimeout(800);
+    const f = await p.evaluate(() => {
+      const bar = document.querySelector('.replay-bar').getBoundingClientRect();
+      const top = document.querySelector('.replay-top').getBoundingClientRect();
+      const btns = [...document.querySelectorAll('.replay-ui button, .replay-ui input')].filter((b) => b.getBoundingClientRect().width > 0);
+      const small = btns.filter((b) => b.getBoundingClientRect().height < 40 && b.tagName === 'BUTTON').length;
+      const out = btns.filter((b) => { const r = b.getBoundingClientRect(); return r.right > innerWidth + 1 || r.left < -1 || r.bottom > innerHeight + 1; }).length;
+      return { sceneVisible: Math.round(bar.top - top.bottom), small, out, overflow: document.documentElement.scrollWidth - innerWidth };
+    });
+    check(`${name}: controls fit, touch targets ≥ 40 px, the scene stays visible`, f.out === 0 && f.small === 0 && f.overflow <= 0 && f.sceneVisible > vp.height * 0.2, JSON.stringify(f));
+    await p.tap('[data-testid="replay-cam-side"]');
+    check(`${name}: tap switches the camera`, (await p.getAttribute('[data-testid="replay-cam-side"]', 'aria-checked')) === 'true');
+    await shot(p, `mobile-${name}`);
+    await p.context().close();
+  }
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

@@ -330,6 +330,10 @@ export class ReplayPlayer {
       ty = 1.12;
       fov = 34;
     }
+    // Fit both fighters across the frame at any aspect (portrait phones need more distance).
+    const hHalf = Math.atan(Math.tan(THREE.MathUtils.degToRad(fov) / 2) * Math.max(0.3, this.camera.aspect));
+    const span = d / 2 + (this.preset === 'close' ? 0.55 : 0.85);
+    dist = Math.max(dist, span / Math.tan(hHalf));
     let px = fx + nx * dist;
     let pz = fz + nz * dist;
     // Keep inside the hall: pull in along the view line if needed.
@@ -340,6 +344,13 @@ export class ReplayPlayer {
       pz = fz + (pz - fz) * Math.min(1, k);
     }
     y = Math.min(CEIL, y);
+    // Where the hall stops the camera backing off (tall portrait screens), widen the lens instead.
+    const actual = Math.hypot(px - fx, pz - fz);
+    if (actual < dist - 1e-3) {
+      const needH = Math.atan(span / actual);
+      const vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(needH) / Math.max(0.3, this.camera.aspect)));
+      fov = Math.min(75, Math.max(fov, vfov));
+    }
     this.tmp.set(px, y, pz);
     // Restrained following; instant cuts on seek or with reduced motion.
     const kk = this.snapCam || this.o.reducedMotion ? 1 : 1 - Math.exp(-5 * dt);

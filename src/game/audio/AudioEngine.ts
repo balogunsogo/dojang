@@ -101,6 +101,7 @@ export class AudioEngine {
   private replayBus: GainNode | null = null;
   /** Take and pitch/level variation source (Math.random live; seeded for replay cues). */
   private rand: () => number = Math.random;
+  private seededNow = false;
   private amb: GainNode | null = null;
   private room: ConvolverNode | null = null;
   private noise: AudioBuffer | null = null;
@@ -329,7 +330,8 @@ export class AudioEngine {
     this.last.set(cdKey, t);
     // A different take than last time.
     let v = (this.rand() * list.length) | 0;
-    if (list.length > 1 && v === this.lastVariant.get(name)) v = (v + 1) % list.length;
+    // (Seeded replay cues skip this so a replayed moment always picks the same take.)
+    if (list.length > 1 && v === this.lastVariant.get(name) && !this.seededNow) v = (v + 1) % list.length;
     this.lastVariant.set(name, v);
     const src = ctx.createBufferSource();
     src.buffer = list[v];
@@ -399,10 +401,12 @@ export class AudioEngine {
       r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
       return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
     };
+    this.seededNow = true;
     try {
       fn();
     } finally {
       this.rand = prev;
+      this.seededNow = false;
     }
   }
 

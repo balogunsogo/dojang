@@ -237,7 +237,8 @@ export function MatchScreen() {
       {session && mode === 'training' && !replayOpen && <TrainingSummary session={session} />}
       {session && replayOpen && <ReplayViewer onBack={() => useReplay.getState().close()} />}
       {settings.showPerf && <PerfOverlay />}
-      {touch && <RotatePrompt />}
+      {/* Watching a replay is fine in portrait; matches still ask for landscape. */}
+      {touch && !replayOpen && <RotatePrompt />}
     </div>
   );
 }
