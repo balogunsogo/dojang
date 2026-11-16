@@ -42,6 +42,7 @@ What stays the same:
    - **Side-column desktop layout** when the column plus tree fit, which is ≥ 1400 × 760.
    - **Tablet layout** (stacked header) between, including 1280 × 800.
    - **Stage pager** below 900 px wide or 600 px tall.
+   - **Fit to height:** the tree sits in the space between the header and the bottom row and scales down to fit it (never up). Below 80% scale the stage pager takes over. This stops fixtures running under the primary button on shorter laptop windows (UAT report, 1325 × 720).
 7. **Phone landscape Abandon** sits at the right of the stage tabs, and its confirm opens beneath. The phone boards don't place it, and the bottom row had no room.
 8. **Post-win note** reads "Tunde is Seed 1 and starts the tournament here.", using the fighter's short name and no pronoun.
 9. **Bracket reveal** is a 180 ms fade on the newly decided score. The tick slide (optional) is not animated.

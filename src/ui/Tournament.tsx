@@ -439,10 +439,45 @@ function bracketSentence(o: OpenBracket) {
 /** Positions from the handoff (relative to the tree origin). */
 const POS: Record<BoutId, { x: number; y: number }> = { qf1: { x: 0, y: 60 }, qf2: { x: 0, y: 280 }, sf1: { x: 236, y: 40 }, sf2: { x: 236, y: 260 }, f: { x: 472, y: 150 } };
 
-function Tree({ o, cur }: { o: OpenBracket; cur: Bout | null }) {
+/** The tree's natural size (the handoff's positions; the champion name ends near 860). */
+const TREE_W = 860;
+const TREE_H = 390;
+/** Below this scale the tree gets hard to read: the stage pager takes over. */
+const TREE_MIN_SCALE = 0.8;
+
+/**
+ * The tree sits in the space between the header and the bottom row and
+ * scales down (never up) to fit it, so fixtures never run under the
+ * primary button or the hints on shorter windows.
+ */
+function TreeBox({ o, cur, onTooSmall }: { o: OpenBracket; cur: Bout | null; onTooSmall(): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const s = Math.min(1, el.clientHeight / TREE_H, el.clientWidth / TREE_W);
+      if (s < TREE_MIN_SCALE) onTooSmall();
+      else setScale(Math.floor(s * 100) / 100);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="tree-box" ref={ref} data-testid="tree-box">
+      <Tree o={o} cur={cur} scale={scale} />
+    </div>
+  );
+}
+
+function Tree({ o, cur, scale = 1 }: { o: OpenBracket; cur: Bout | null; scale?: number }) {
   const champ = o.bouts.f.winner;
   return (
-    <div className="open-tree" role="img" aria-label={bracketSentence(o)} data-testid="bracket-tree">
+    <div className="open-tree" role="img" aria-label={bracketSentence(o)} data-testid="bracket-tree" style={scale < 1 ? { transform: `scale(${scale})` } : undefined}>
       <span className="col-h" style={{ left: 10 }}>{stageHeader(o, 'qf', cur)}</span>
       <span className="col-h" style={{ left: 246 }}>{stageHeader(o, 'sf', cur)}</span>
       <span className="col-h" style={{ left: 482 }}>{stageHeader(o, 'f', cur)}</span>
@@ -495,7 +530,16 @@ function bracketCopy(o: OpenBracket, cur: Bout | null) {
 
 export function Bracket({ go }: { go(p: MenuPanel): void }) {
   const t = useTournament();
-  const layout = useLayout();
+  const measured = useLayout();
+  // The tree reports when even its smallest readable scale doesn't fit; reset on resize.
+  const [tooSmall, setTooSmall] = useState(false);
+  useEffect(() => setTooSmall(false), [measured]);
+  useEffect(() => {
+    const f = () => setTooSmall(false);
+    window.addEventListener('resize', f);
+    return () => window.removeEventListener('resize', f);
+  }, []);
+  const layout: Layout = tooSmall ? 'pager' : measured;
   const o = bracketInView(t);
   const primaryRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -571,7 +615,7 @@ export function Bracket({ go }: { go(p: MenuPanel): void }) {
           </div>
         )}
       </div>
-      <Tree o={o} cur={cur} />
+      <TreeBox o={o} cur={cur} onTooSmall={() => setTooSmall(true)} />
       {layout === 'tablet' ? (
         <div className="open-bottom">
           <div className="open-foot" ref={primaryRef}>
