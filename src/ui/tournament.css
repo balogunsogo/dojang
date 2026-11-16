@@ -85,7 +85,7 @@
 .open-bottom-right .open-abandon .row { justify-content: flex-end; }
 
 /* The tree (positions from the handoff, relative to its origin). */
-.open-tree { position: absolute; left: 560px; top: 250px; width: 890px; height: 420px; }
+.open-tree { position: absolute; left: 560px; top: 250px; width: 860px; height: 420px; }
 .open-tree .col-h { position: absolute; top: 0; font-size: 0.8125rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .open-tree .fx { position: absolute; width: 190px; height: 80px; }
 .open-tree .ln { position: absolute; background: rgb(239 230 216 / .24); }
@@ -272,3 +272,18 @@
 }
 /* Black belt markers get the handoff's 1 px fg 30% inset on dark ink. */
 :is(.open-entry, .open-table) .belt-marker i:is([style*="rgb(20, 20, 20)"], [style*="#141414"]) { box-shadow: inset 0 0 0 1px rgb(239 230 216 / .3); }
+/* Phone landscape: Abandon sits at the right of the stage tabs; its confirm opens below. */
+.tabs-row { position: relative; display: flex; align-items: flex-end; gap: var(--s4); border-bottom: 1px solid var(--line); }
+.tabs-row .open-tabs { border-bottom: 0; }
+.tabs-abandon { margin-left: auto; }
+.tabs-abandon .open-abandon-link { align-self: auto; }
+.tabs-abandon .open-abandon { position: absolute; z-index: 3; right: 0; top: 100%; width: min(400px, 100%); margin: var(--s1) 0 0; padding: var(--s3) var(--s4); background: rgb(21 18 15 / .96); border-radius: var(--radius); }
+.pager-foot .foot-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .open-champion .col { width: min(400px, 100% - 2 * var(--edge)); }
+  .open-champion .btn-quiet .hint-key { display: none; }
+}
+@media (max-width: 599px) and (orientation: portrait) {
+  .open-champion .context { right: calc(var(--s5) + var(--sar)); }
+  .open-champion .btn-quiet .hint-key { display: none; }
+}

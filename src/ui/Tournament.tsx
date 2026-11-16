@@ -638,6 +638,7 @@ function Pager({ o, cur, title, sub, primary, abandon, onBack, primaryRef }: { o
         )}
       </header>
       {portrait && sub && <p className="open-sub">{prev ? `You beat ${fname(opponentIn(o, prev))} ${winnerScore(prev)}.` : sub}</p>}
+      <div className="tabs-row">
       <div className="segmented open-tabs" role="tablist" aria-label="Bracket stage">
         {stages.map((s, i) => (
           <button
@@ -668,6 +669,8 @@ function Pager({ o, cur, title, sub, primary, abandon, onBack, primaryRef }: { o
           </button>
         ))}
       </div>
+      {!portrait && <div className="tabs-abandon">{abandon}</div>}
+      </div>
       <div className={`pager-fixtures ${ids.length === 1 ? 'single' : ''}`} id="open-stage" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {ids.map((id) => {
           const isCur = cur?.id === id;
@@ -691,7 +694,7 @@ function Pager({ o, cur, title, sub, primary, abandon, onBack, primaryRef }: { o
           {primary}
         </div>
         {!portrait && <p className="foot-line">{footLine}</p>}
-        {abandon}
+        {portrait && abandon}
       </div>
     </section>
   );
