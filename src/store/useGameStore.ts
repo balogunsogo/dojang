@@ -5,6 +5,7 @@ import type { MatchPhase } from '../game/combat/CombatWorld';
 import type { PerfSnapshot } from '../game/perf/PerfMonitor';
 import type { QualitySetting } from '../game/render/quality';
 import type { CharacterId } from '../game/render/characterFactory';
+import type { BoutId, RoundSeconds } from '../game/tournament/tournament';
 import {
   type Belt,
   checkPromotion,
@@ -20,7 +21,31 @@ import {
 import type { TrainingHud } from '../game/training/TrainingController';
 
 export type GameMode = 'arcade' | 'competitive' | 'training';
-export type MenuPanel = 'home' | 'spar' | 'training' | 'fighter' | 'progress' | 'settings' | 'controls' | 'friend' | 'online';
+export type MenuPanel =
+  | 'home'
+  | 'spar'
+  | 'training'
+  | 'fighter'
+  | 'progress'
+  | 'settings'
+  | 'controls'
+  | 'friend'
+  | 'online'
+  // The Dojang Open (Phase 11)
+  | 'tournament'
+  | 'bracket'
+  | 'prematch'
+  | 'champion'
+  | 'openHistory';
+
+/** A Dojang Open bout: an ordinary Competitive match with these fighters and round length. */
+export interface TournamentBout {
+  number: number;
+  bout: BoutId;
+  fighter: CharacterId;
+  opponent: CharacterId;
+  roundSeconds: RoundSeconds;
+}
 
 /** A match against a friend: on this device (couch) or online. */
 export interface Versus {
@@ -170,6 +195,11 @@ interface GameStore {
   /** Friend match setup (null against the AI). */
   versus: Versus | null;
   startVersus(v: Versus, mode: 'arcade' | 'competitive'): void;
+  /** Dojang Open bout in progress (null otherwise). */
+  tournament: TournamentBout | null;
+  startTournamentBout(t: TournamentBout, d: Difficulty): void;
+  /** Where Choose fighter returns to (the Open's entry screen when opened from there). */
+  fighterFrom: MenuPanel | null;
   /** Current main-menu panel (kept when returning from a match). */
   menuPanel: MenuPanel;
   setMenuPanel(p: MenuPanel): void;
@@ -221,12 +251,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
   coach: null,
   setCoach: (tip, scheme) => set({ coach: { tip, scheme } }),
   versus: null,
-  startVersus: (versus, mode) => set({ screen: 'match', versus, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  tournament: null,
+  fighterFrom: null,
+  startTournamentBout: (tournament, difficulty) =>
+    set({ screen: 'match', versus: null, tournament, difficulty, mode: 'competitive', paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startVersus: (versus, mode) => set({ screen: 'match', versus, tournament: null, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
   menuPanel: 'home',
   setMenuPanel: (menuPanel) => set({ menuPanel }),
-  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', versus: null, difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
-  startTraining: (activity) => set({ screen: 'match', versus: null, mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
-  toMenu: (panel?: MenuPanel) => set({ screen: 'menu', menuPanel: typeof panel === 'string' ? panel : 'home', versus: null, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startMatch: (difficulty, mode = 'arcade') => set({ screen: 'match', versus: null, tournament: null, difficulty, mode, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  startTraining: (activity) => set({ screen: 'match', versus: null, tournament: null, mode: 'training', activity, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
+  toMenu: (panel?: MenuPanel) => set({ screen: 'menu', menuPanel: typeof panel === 'string' ? panel : 'home', versus: null, tournament: null, paused: false, hud: null, toasts: [], trainingResult: null, trainingHud: null, promotion: null, coach: null }),
   setFighter: (fighter) => commitProgress({ ...get().progress, fighter }),
   setTrainingHud: (trainingHud) => set({ trainingHud }),
   finishTraining: (r) => {
