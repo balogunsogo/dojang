@@ -30,7 +30,7 @@ export async function open(viewport, o = {}) {
   }, [o.fighter ?? 'amara', o.menuScene ?? true, o.save ?? null]);
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
-  p.on('console', (m) => m.type() === 'info' && m.text().includes('[Dojang Open]') && (p.__diag = m.text()));
+  p.on('console', (m) => m.type() === 'debug' && m.text().includes('[Dojang Open]') && (p.__diag = m.text()));
   await p.goto(base);
   await p.waitForSelector('[data-testid=mode-tournament]', { timeout: 30000 });
   if (o.menuScene !== false) await p.waitForSelector('.menu-backdrop.live', { timeout: 90000 }).catch(() => {});

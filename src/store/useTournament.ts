@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Difficulty } from '../game/ai/AIController';
 import { CHARACTERS, type CharacterId } from '../game/render/characterFactory';
-import { type FixtureOutcome, resolveFixture } from '../game/tournament/simulate';
+import { type FixtureOutcome, prewarmSimWorker, resolveFixture } from '../game/tournament/simulate';
 import {
   applyResult,
   type BoutId,
@@ -95,6 +95,7 @@ export const useTournament = create<TournamentStore>((set, get) => ({
     const o = get().save.active;
     const b = o && nextPlayerBout(o);
     if (!o || !b) return false;
+    prewarmSimWorker();
     useGameStore.getState().startTournamentBout({ number: o.number, bout: b.id, fighter: o.fighter, opponent: opponentIn(o, b)!, roundSeconds: o.roundSeconds }, o.difficulty);
     return true;
   },
@@ -156,7 +157,8 @@ export const useTournament = create<TournamentStore>((set, get) => ({
       const s = get().save;
       if (s.active && isComplete(s.active)) persist(finishOpen(s, abandoned));
       set({ diag });
-      if (diag.length && typeof console !== 'undefined') console.info('[Dojang Open] fixtures', diag);
+      // Diagnostics (fallback-generated fixtures are marked here and in the save's `source`).
+      if (diag.length && typeof console !== 'undefined') console.debug('[Dojang Open] fixtures', JSON.stringify(diag));
     })();
     try {
       await resolving;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHARACTERS, type CharacterId, ROSTER } from '../src/game/render/characterFactory';
-import { fallbackOutcome, HeadlessBout, resolveFixture } from '../src/game/tournament/simulate';
+import { fallbackOutcome, resolveFixture } from '../src/game/tournament/simulate';
+import { HeadlessBout } from '../src/game/tournament/headless';
 import {
   type ActiveOpen,
   applyResult,

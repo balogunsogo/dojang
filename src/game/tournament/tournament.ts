@@ -91,16 +91,8 @@ const FEEDS: { from: BoutId; to: BoutId; slot: 'a' | 'b' }[] = [
 
 // ---- RNG and the draw --------------------------------------------------------
 
-/** mulberry32: small, fast, seedable. */
-export function rng(seed: number) {
-  let t = seed >>> 0;
-  return () => {
-    t = (t + 0x6d2b79f5) >>> 0;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { rng } from './rng';
+import { rng } from './rng';
 
 /** Derive a per-fixture seed from the Open's seed. */
 export function boutSeed(seed: number, id: BoutId) {
