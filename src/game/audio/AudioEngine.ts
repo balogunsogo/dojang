@@ -97,6 +97,11 @@ export class AudioEngine {
   private ctx: BaseAudioContext | null = null;
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
+  /** Replay playback routes its sounds here (under the effects level), so they can be cut at once. */
+  private replayBus: GainNode | null = null;
+  /** Take and pitch/level variation source (Math.random live; seeded for replay cues). */
+  private rand: () => number = Math.random;
+  private seededNow = false;
   private amb: GainNode | null = null;
   private room: ConvolverNode | null = null;
   private noise: AudioBuffer | null = null;
@@ -324,15 +329,16 @@ export class AudioEngine {
     if (this.voices >= MAX_VOICES && (GAIN[name] ?? 0.5) < 0.3) return;
     this.last.set(cdKey, t);
     // A different take than last time.
-    let v = (Math.random() * list.length) | 0;
-    if (list.length > 1 && v === this.lastVariant.get(name)) v = (v + 1) % list.length;
+    let v = (this.rand() * list.length) | 0;
+    // (Seeded replay cues skip this so a replayed moment always picks the same take.)
+    if (list.length > 1 && v === this.lastVariant.get(name) && !this.seededNow) v = (v + 1) % list.length;
     this.lastVariant.set(name, v);
     const src = ctx.createBufferSource();
     src.buffer = list[v];
-    src.playbackRate.value = (o.rate ?? 1) * (o.exact ? 1 : 1 + (Math.random() * 2 - 1) * 0.03);
+    src.playbackRate.value = (o.rate ?? 1) * (o.exact ? 1 : 1 + (this.rand() * 2 - 1) * 0.03);
     const p = o.at !== undefined ? this.pos[o.at] : null;
     const g = ctx.createGain();
-    g.gain.value = (GAIN[mixName] ?? 0.5) * (o.gain ?? 1) * (p ? p.gain : 1) * (o.exact ? 1 : 1 + (Math.random() * 2 - 1) * 0.06);
+    g.gain.value = (GAIN[mixName] ?? 0.5) * (o.gain ?? 1) * (p ? p.gain : 1) * (o.exact ? 1 : 1 + (this.rand() * 2 - 1) * 0.06);
     src.connect(g);
     let out: AudioNode = g;
     if (p && 'createStereoPanner' in ctx) {
@@ -341,7 +347,7 @@ export class AudioEngine {
       g.connect(pan);
       out = pan;
     }
-    out.connect(this.sfx);
+    out.connect(this.replayBus ?? this.sfx);
     const send = SEND[name] ?? 0;
     let sendG: GainNode | null = null;
     if (send > 0 && this.room) {
@@ -361,6 +367,46 @@ export class AudioEngine {
     if (this.logging) {
       this.log.push(name);
       if (this.log.length > 200) this.log.shift();
+    }
+  }
+
+  /* ── Replay playback (Phase 12A): opt-in, live play never uses it ─── */
+
+  /** Start routing sounds to a replay bus (under the effects level, so volume and mute apply). */
+  beginReplay() {
+    this.endReplay();
+    if (!this.ctx || !this.sfx) return;
+    this.replayBus = this.ctx.createGain();
+    this.replayBus.connect(this.sfx);
+  }
+
+  /** Cut every replay sound still playing (pause, seek, restart, exit) and route back to normal. */
+  endReplay() {
+    const bus = this.replayBus;
+    this.replayBus = null;
+    if (!bus || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    bus.gain.setValueAtTime(bus.gain.value, t);
+    bus.gain.linearRampToValueAtTime(0, t + 0.03);
+    setTimeout(() => bus.disconnect(), 80);
+  }
+
+  /** Run `fn` with seeded variation, so a replayed cue sounds the same every time. */
+  seeded(seed: number, fn: () => void) {
+    const prev = this.rand;
+    let t = seed >>> 0 || 1;
+    this.rand = () => {
+      t = (t + 0x6d2b79f5) >>> 0;
+      let r = Math.imul(t ^ (t >>> 15), 1 | t);
+      r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+    this.seededNow = true;
+    try {
+      fn();
+    } finally {
+      this.rand = prev;
+      this.seededNow = false;
     }
   }
 
@@ -471,7 +517,7 @@ export class AudioEngine {
       this.play('cloth-swish', { delay: Math.max(0, o.strikeIn - 0.16), gain: o.kind === 'leadKick' ? 0.75 : 1, at, key: `cs${at}` });
       if (o.kind !== 'leadKick') this.play('cloth-flick', { delay: o.strikeIn - 0.01, at, key: `cf${at}`, rate: 1.15 });
     } else this.play('cloth-swish', { delay: Math.max(0, o.strikeIn - 0.08), gain: 0.45, rate: 1.3, at, key: `cs${at}` });
-    if ((o.kind === 'turning' || o.kind === 'kick') && Math.random() < 0.4) this.play('exhale', { delay: o.strikeIn - 0.06, at, key: `ex${at}` });
+    if ((o.kind === 'turning' || o.kind === 'kick') && this.rand() < 0.4) this.play('exhale', { delay: o.strikeIn - 0.06, at, key: `ex${at}` });
   }
 
   /** A clean contact on the protector (`at` = the fighter who was struck). */

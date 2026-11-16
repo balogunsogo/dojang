@@ -10,6 +10,7 @@ import type { InputManager } from './input/InputManager';
 import { approachAngle, wrapAngle } from './math';
 import { type NetMsg, Rollback } from './netplay/Rollback';
 import { PerfMonitor } from './perf/PerfMonitor';
+import { ReplayRecorder } from './replay/recorder';
 import { type BeltColor, CHARACTERS, nextFighter, type CharacterDef, type CharacterId, type CharacterInstance, createCharacter, loadFighterAsset } from './render/characterFactory';
 import { buildDojang, type DojangHandle } from './render/Dojang';
 import { Effects } from './render/Effects';
@@ -35,6 +36,8 @@ export interface SessionCallbacks {
   onTrainingEnd?(r: TrainingResult): void;
   /** Arcade/Competitive match finished; `won` is from the player's side. */
   onMatchEnd?(won: boolean): void;
+  /** Replay capture for this match or activity (a new recorder on every start / restart). */
+  onRecorder?(r: ReplayRecorder): void;
   /** Training coach: the visible tip (or null) and the active input scheme. */
   onCoach?(tip: CoachTip | null, scheme: InputScheme): void;
 }
@@ -136,6 +139,10 @@ export class GameSession {
   /** Online rollback (null offline). */
   readonly net: Rollback | null = null;
   private seenEvents = new Map<string, number>();
+  /** Replay capture (observational: reads the world after each authoritative tick). */
+  recorder: ReplayRecorder;
+  /** The replay viewer has the scene: live fighters and effects hidden, no camera or animation updates. */
+  private held = false;
   private overFrame: number | null = null;
 
   constructor(o: SessionOptions) {
@@ -159,12 +166,42 @@ export class GameSession {
       this.resetTraining();
     }
     this.ai = new AIController(o.difficulty, (Date.now() & 0xffff) + 1);
+    this.recorder = this.newRecorder();
     if (o.opponent === 'online' && o.net) {
       const net = new Rollback(this.world, this.me, (m) => o.net!.send(m), { host: !!o.netHost });
       this.net = net;
       o.net.onMessage = (m) => net.receive(m);
+      // Replay: stage every simulated tick; commit only confirmed ones (see netFrame).
+      net.onSim = (f, w) => this.recorder.stage(f, w);
     }
     this.dynRes = new DynamicResolution(o.quality, window.devicePixelRatio || 1);
+  }
+
+  private newRecorder() {
+    this.recorder?.dispose();
+    const r = new ReplayRecorder({
+      ids: [this.defs[0].id, this.defs[1].id],
+      belts: [this.beltOf(0), this.beltOf(1)],
+      names: this.o.names ?? [this.defs[0].name, this.defs[1].name],
+      me: this.me,
+      mode: this.o.mode,
+      online: this.o.opponent === 'online',
+      couch: this.o.opponent === 'local',
+      boundary: this.world.rules.boundary,
+    });
+    this.o.callbacks.onRecorder?.(r);
+    return r;
+  }
+
+  private beltOf(i: 0 | 1): BeltColor {
+    return this.o.belts?.[i] ?? (i === 0 ? (this.o.playerBelt ?? 'white') : this.training ? 'black' : AI_BELT[this.o.difficulty]);
+  }
+
+  /** The replay viewer takes the scene (true) or gives it back (false). Presentation only. */
+  setHeld(on: boolean) {
+    this.held = on;
+    for (const c of this.chars) c.group.visible = !on;
+    if (this.fx) this.fx.group.visible = !on;
   }
 
   async init() {
@@ -173,7 +210,7 @@ export class GameSession {
     this.o.scene.add(this.env.group);
     const corners = ['chung', 'hong'] as const;
     for (let i = 0; i < 2; i++) {
-      const belt: BeltColor = this.o.belts?.[i] ?? (i === 0 ? (this.o.playerBelt ?? 'white') : this.training ? 'black' : AI_BELT[this.o.difficulty]);
+      const belt: BeltColor = this.beltOf(i as 0 | 1);
       const c = createCharacter(gltf, this.defs[i], corners[i], belt);
       this.o.scene.add(c.group);
       this.chars.push(c);
@@ -202,6 +239,7 @@ export class GameSession {
       this.trainingReported = false;
       this.resetTraining();
     } else this.world.resetMatch();
+    this.recorder = this.newRecorder();
     this.matchReported = false;
     this.syncPrev();
     this.lastPhase = '';
@@ -220,6 +258,7 @@ export class GameSession {
   finishTraining() {
     if (!this.training || this.trainingReported) return;
     this.trainingReported = true;
+    this.recorder.complete(null);
     this.coach?.stop();
     this.publishCoach();
     this.o.callbacks.onTrainingEnd?.(this.training.result());
@@ -327,7 +366,8 @@ export class GameSession {
     const a2 = this.o.input2?.poll();
     if (a2?.pause) this.o.callbacks.onPauseToggle();
     if (this.net) this.netFrame(dt, actions);
-    else if (!this.paused) {
+    // While the replay viewer holds the scene, the (finished) match stands still offline.
+    else if (!this.paused && !this.held) {
       this.acc += dt;
       let steps = 0;
       let first = true;
@@ -346,6 +386,7 @@ export class GameSession {
           if (!first) ai.dash = ai.switchStance = false;
         } else ai = this.training ? this.training.partnerIntent(w) : this.o.aiEnabled ? this.ai.think(w, o, p) : emptyIntent();
         w.step([pi, ai]);
+        this.recorder.tick(w, w.events);
         this.trainingTick();
         if (first) this.o.input.consumeEdges();
         if (first) this.o.input2?.consumeEdges();
@@ -363,6 +404,11 @@ export class GameSession {
     p = w.fighters[this.me];
     o = w.fighters[1 - this.me];
     const t1 = performance.now();
+    if (this.held) {
+      // The replay viewer drives the camera and its own fighters meanwhile.
+      this.perf.frame(dtRaw, t1 - t0, 0);
+      return;
+    }
 
     // Render interpolation.
     const frozen = this.paused;
@@ -441,6 +487,8 @@ export class GameSession {
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
+    // Replay: commit ticks once every input up to them is known and no correction is pending.
+    if (!net.pending) this.recorder.commitThrough(Math.min(net.remoteHead, net.frame - 1));
     net.flush();
     for (const { f, e } of net.events) {
       const who = 'fighter' in e ? e.fighter : 'attacker' in e ? e.attacker : '';
@@ -458,6 +506,7 @@ export class GameSession {
     else if (this.overFrame === null) this.overFrame = net.frame;
     if (this.overFrame !== null && net.remoteHead >= this.overFrame && !net.pending && !this.matchReported) {
       this.matchReported = true;
+      this.recorder.complete(w.matchWinner);
       audio.matchEnd(w.matchWinner === this.me);
       this.o.callbacks.onMatchEnd?.(w.matchWinner === this.me);
     }
@@ -484,6 +533,7 @@ export class GameSession {
       this.publishCoach();
     }
     for (const f of t.feedback) {
+      if (f.code) this.recorder.training(f.code);
       // Restrained training audio: a tock for hits and steps, a soft tick for misses.
       if (f.code === 'hit') {
         audio.trainHit(0);
@@ -628,6 +678,7 @@ export class GameSession {
       case 'match-end':
         if (!this.matchReported && !this.training) {
           this.matchReported = true;
+          this.recorder.complete(e.winner);
           audio.matchEnd(e.winner === this.me);
           this.o.callbacks.onMatchEnd?.(e.winner === this.me);
         }
@@ -666,6 +717,10 @@ export class GameSession {
 
   dispose() {
     this.ready = false;
+    // A completed match keeps its highlights (sealed now); an unfinished one keeps nothing.
+    if (this.recorder.completed) this.recorder.seal();
+    else this.recorder.dispose();
+    if (this.net) this.net.onSim = null;
     audio.setAmbient(false);
     for (const a of this.anims) a.dispose();
     for (const c of this.chars) c.dispose();

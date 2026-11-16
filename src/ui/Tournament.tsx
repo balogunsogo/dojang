@@ -26,6 +26,8 @@ import { BackButton, BeltMarker, GroupLabel, OptionGroup, OptionRow, PrimaryButt
 import { DIFFS, LEVEL_BELT, LEVEL_NAME } from './levels';
 import { PromotionNote } from './Overlays';
 import './tournament.css';
+import { WatchReplay } from './Replay';
+import { useReplay } from '../store/useReplay';
 
 /* ── Shared helpers ───────────────────────────────────────────────── */
 
@@ -898,6 +900,12 @@ export function Champion({ go }: { go(p: MenuPanel): void }) {
           <PrimaryButton onClick={() => exit('tournament')} hint="Enter" testid="new-open">
             Enter a new Open
           </PrimaryButton>
+          <WatchReplay
+            onWatch={() => {
+              // The final's highlights, in a standalone viewer (the match renderer is gone; the menu's is released).
+              if (useReplay.getState().open({ kind: 'menu', panel: 'champion' })) useGameStore.setState({ screen: 'replay' });
+            }}
+          />
           <QuietButton onClick={() => exit('bracket', true)} testid="champion-bracket">
             Bracket
           </QuietButton>

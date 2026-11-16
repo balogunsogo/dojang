@@ -37,6 +37,12 @@ export class Rollback {
   /** Events from simulated ticks (including re-simulations), drained by the session. */
   readonly events: { f: number; e: CombatEvent }[] = [];
   rollbacks = 0;
+  /**
+   * Observer (replay capture): called after each simulated tick, including
+   * re-simulations, with the world and that tick's events. Read-only; it
+   * does not change what the rollback does.
+   */
+  onSim: ((f: number, w: CombatWorld) => void) | null = null;
   /** Last time a message arrived (ms). */
   lastHeard = performance.now();
   private readonly local: number[] = [];
@@ -142,6 +148,7 @@ export class Rollback {
     decodeIntent(this.local[f] ?? NEUTRAL, this.intents[this.me]);
     decodeIntent(r, this.intents[1 - this.me]);
     this.world.step(this.intents);
+    this.onSim?.(f, this.world);
     for (const e of this.world.events) this.events.push({ f, e });
     this.world.events.length = 0;
   }
