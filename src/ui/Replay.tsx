@@ -14,6 +14,19 @@ import { usePadButton, useGamepadNav, PrimaryButton, QuietButton, Segmented } fr
 import { prefersReducedMotion } from './MenuBackdrop';
 import './replay.css';
 
+/**
+ * Previous / next highlight: monochrome inline SVG (currentColor), sized like the
+ * other transport glyphs. Text glyphs like ⏮ / ⏭ render as colour emoji on iOS.
+ */
+function SkipIcon({ dir }: { dir: 'prev' | 'next' }) {
+  return (
+    <svg className="ricon" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true" focusable="false" style={dir === 'prev' ? { transform: 'scaleX(-1)' } : undefined}>
+      <path d="M3 3.2v9.6L10 8z" fill="currentColor" />
+      <rect x="11" y="3.2" width="2" height="9.6" rx="0.4" fill="currentColor" />
+    </svg>
+  );
+}
+
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
 /**
@@ -238,13 +251,13 @@ export function ReplayViewer({ onBack }: { onBack(): void }) {
         <div className="replay-controls">
           <div className="replay-transport">
             <button type="button" className="rbtn" aria-label="Previous highlight" onClick={() => go(-1)} disabled={n < 2} data-testid="replay-prev">
-              <span aria-hidden>⏮</span>
+              <SkipIcon dir="prev" />
             </button>
             <button ref={playRef} type="button" className="rbtn play" aria-label={r.playing ? 'Pause' : 'Play'} onClick={() => (r.playing ? c?.pause() : c?.play())} disabled={!r.ready} data-testid="replay-play">
               <span aria-hidden>{r.playing && !scrubbing ? '❚❚' : '▶'}</span>
             </button>
             <button type="button" className="rbtn" aria-label="Next highlight" onClick={() => go(1)} disabled={n < 2} data-testid="replay-next">
-              <span aria-hidden>⏭</span>
+              <SkipIcon dir="next" />
             </button>
             <button type="button" className="rbtn" aria-label="Restart" onClick={() => c?.restart()} disabled={!r.ready} data-testid="replay-restart">
               <span aria-hidden>↺</span>
