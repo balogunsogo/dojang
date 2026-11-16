@@ -77,15 +77,20 @@
 .open-bracket.tablet .open-side { padding: calc(56px + var(--sat)) 64px 0 calc(64px + var(--sal)); }
 .open-bracket.tablet .title { font-size: 2.5rem; line-height: 3rem; }
 .open-bracket.tablet .open-sub { max-width: none; }
-.open-bracket.tablet .open-tree { left: 112px; }
-.open-bottom { position: absolute; left: calc(64px + var(--sal)); right: calc(64px + var(--sar)); bottom: calc(40px + var(--sab)); display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s5); }
+.open-bracket.tablet { display: flex; flex-direction: column; padding-bottom: calc(40px + var(--sab)); }
+.open-bracket.tablet .open-side { flex: none; }
+/* The tree's box: the space left between the header and the bottom row. */
+.tree-box { position: relative; min-width: 0; min-height: 0; }
+.open-bracket.desktop .tree-box { position: absolute; left: 560px; top: calc(250px + var(--sat)); right: calc(var(--s4) + var(--sar)); bottom: calc(56px + 20px + var(--s5) + var(--sab)); }
+.open-bracket.tablet .tree-box { flex: 1; margin: var(--s6) calc(64px + var(--sar)) var(--s4) calc(112px + var(--sal)); }
+.open-bottom { flex: none; margin: 0 calc(64px + var(--sar)) 0 calc(64px + var(--sal)); display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s5); }
 .open-bottom .btn-primary { width: 380px; }
 .open-bottom-right { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s1); }
 .open-bottom-right .open-abandon { max-width: 420px; text-align: right; }
 .open-bottom-right .open-abandon .row { justify-content: flex-end; }
 
 /* The tree (positions from the handoff, relative to its origin). */
-.open-tree { position: absolute; left: 560px; top: 250px; width: 860px; height: 420px; }
+.open-tree { position: absolute; left: 0; top: 0; width: 860px; height: 390px; transform-origin: 0 0; }
 .open-tree .col-h { position: absolute; top: 0; font-size: 0.8125rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .open-tree .fx { position: absolute; width: 190px; height: 80px; }
 .open-tree .ln { position: absolute; background: rgb(239 230 216 / .24); }
@@ -286,4 +291,8 @@
 @media (max-width: 599px) and (orientation: portrait) {
   .open-champion .context { right: calc(var(--s5) + var(--sar)); }
   .open-champion .btn-quiet .hint-key { display: none; }
+}
+/* Short portrait phones: less hall above, so the fixtures fit without scrolling. */
+@media (max-height: 700px) and (orientation: portrait) {
+  .open-bracket.pager.portrait .pager-head .btn-back { margin-bottom: 3vh; }
 }
